@@ -24,6 +24,7 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
 });
 
 function initDb() {
+    // Basic Table
     db.run(`CREATE TABLE IF NOT EXISTS entries (
         id TEXT PRIMARY KEY,
         group_type TEXT,
@@ -35,20 +36,36 @@ function initDb() {
         is_security INTEGER,
         savings_type TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
+    )`, () => {
+        // Migration: Add new columns if they don't exist
+        const columns = [
+            'ALTER TABLE entries ADD COLUMN owner TEXT DEFAULT "main"',
+            'ALTER TABLE entries ADD COLUMN paid_by TEXT DEFAULT "main"',
+            'ALTER TABLE entries ADD COLUMN is_shared INTEGER DEFAULT 0',
+            'ALTER TABLE entries ADD COLUMN linked_id TEXT'
+        ];
+
+        columns.forEach(col => {
+            db.run(col, (err) => {
+                if (err && !err.message.includes('duplicate column')) {
+                    console.log('Migration note:', err.message);
+                }
+            });
+        });
+    });
 }
 
 // API Endpoints
 
 // GET all entries
 app.get('/api/entries', (req, res) => {
-    db.all("SELECT * FROM entries", [], (err, rows) => {
+    let query = "SELECT * FROM entries";
+    db.all(query, [], (err, rows) => {
         if (err) {
             res.status(400).json({ "error": err.message });
             return;
         }
 
-        // Transform flat list back into structured state object
         const state = {
             fixkosten: [],
             budget: [],
@@ -61,7 +78,11 @@ app.get('/api/entries', (req, res) => {
                 id: row.id,
                 name: row.name,
                 amount: row.amount,
-                account: row.account
+                account: row.account,
+                owner: row.owner,
+                paidBy: row.paid_by,
+                isShared: !!row.is_shared,
+                linkedId: row.linked_id
             };
 
             if (row.group_type === 'fixkosten') {
@@ -85,46 +106,65 @@ app.get('/api/entries', (req, res) => {
 
 // POST (Create or Update)
 app.post('/api/entries', (req, res) => {
-    const { id, type, data } = req.body;
+    const { id, type, data, isSplit } = req.body;
 
-    // Check if entry exists to determine INSERT vs UPDATE
-    // For simplicity with the existing frontend logic that sends the whole entry,
-    // we can use REPLACE INTO or INSERT OR REPLACE.
+    // Determine values
+    const owner = data.owner || 'main';
+    const paidBy = data.paidBy || 'main';
+    let amount = data.amount;
 
+    // Split Logic: If split, we halve the amount for the main entry
+    if (isSplit) {
+        amount = Math.round(data.amount / 2);
+    }
+
+    // SQLite Booleans are 0/1
     const isSecurity = data.isSecurity ? 1 : 0;
+    const isShared = (isSplit || data.isShared) ? 1 : 0;
 
-    const sql = `INSERT OR REPLACE INTO entries 
-                 (id, group_type, name, amount, account, interval, category, is_security, savings_type) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const stmt = db.prepare(`INSERT OR REPLACE INTO entries 
+        (id, group_type, name, amount, account, interval, category, is_security, savings_type, owner, paid_by, is_shared, linked_id) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
 
-    const params = [
-        data.id,
-        type,
-        data.name,
-        data.amount,
-        data.account,
-        data.interval || null,
-        data.category || null,
-        isSecurity,
-        data.type || null // savings type
-    ];
+    // 1. Run Main Insert
+    stmt.run(
+        id, type, data.name, amount, data.account,
+        data.interval || null, data.category || null,
+        isSecurity, data.type || null,
+        owner, paidBy, isShared, data.linkedId || null,
+        function (err) {
+            if (err) {
+                res.status(400).json({ "error": err.message });
+                return;
+            }
 
-    db.run(sql, params, function (err) {
-        if (err) {
-            res.status(400).json({ "error": err.message });
-            return;
+            // 2. If Split, create Partner Entry
+            if (isSplit) {
+                const partnerId = id + '_partner';
+                const otherOwner = owner === 'main' ? 'partner' : 'main';
+
+                // Partner entry mirrors main entry but with half amount and linked_id
+                // Note: paid_by remains whoever paid the original amount!
+                stmt.run(
+                    partnerId, type, data.name, amount, data.account,
+                    data.interval || null, data.category || null,
+                    isSecurity, data.type || null,
+                    otherOwner, paidBy, 1, id, // linked to primary
+                    (err) => {
+                        if (err) console.error("Error creating split entry:", err);
+                    }
+                );
+            }
+            stmt.finalize();
+            res.json({ "message": "success", "id": id });
         }
-        res.json({
-            "message": "success",
-            "data": data,
-            "id": this.lastID
-        });
-    });
+    );
 });
 
 // DELETE
 app.delete('/api/entries/:id', (req, res) => {
-    db.run("DELETE FROM entries WHERE id = ?", req.params.id, function (err) {
+    // Delete the entry AND any entry linked to it (cascade delete for split entries)
+    db.run("DELETE FROM entries WHERE id = ? OR linked_id = ?", [req.params.id, req.params.id], function (err) {
         if (err) {
             res.status(400).json({ "error": err.message });
             return;

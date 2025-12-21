@@ -17,6 +17,11 @@
         <header class="app-header">
             <div class="header-content">
                 <h1>Budget Planer</h1>
+                <div class="view-switcher">
+                    <button id="viewMain" class="btn-view active" onclick="switchView('main')">👤 Ich</button>
+                    <button id="viewPartner" class="btn-view" onclick="switchView('partner')">👤 Partnerin</button>
+                    <button id="viewCombined" class="btn-view" onclick="switchView('combined')">👥 Gesamt</button>
+                </div>
                 <div class="header-actions">
                     <button id="exportBtn" class="btn-secondary">Export</button>
                     <label for="importBtn" class="btn-secondary">Import
@@ -31,27 +36,32 @@
                 <div class="card security">
                     <h3>Sicherheit</h3>
                     <p><span id="totalSecurity">0,00 €</span> <span id="yearSecurity" class="yearly-amount"></span></p>
-                    <span class="card-label">Monatlich / Jährlich</span>
+                    <span>Monatlich</span>
                 </div>
                 <div class="card fixed">
                     <h3>Fixkosten</h3>
                     <p><span id="totalFixed">0,00 €</span> <span id="yearFixed" class="yearly-amount"></span></p>
-                    <span class="card-label">Monatlich / Jährlich</span>
+                    <span>Monatlich</span>
                 </div>
                 <div class="card life">
                     <h3>Leben</h3>
                     <p><span id="totalLife">0,00 €</span> <span id="yearLife" class="yearly-amount"></span></p>
-                    <span class="card-label">Monatlich / Jährlich</span>
+                    <span>Monatlich</span>
                 </div>
                 <div class="card wealth">
                     <h3>Vermögen</h3>
                     <p><span id="totalWealth">0,00 €</span> <span id="yearWealth" class="yearly-amount"></span></p>
-                    <span class="card-label">Monatlich / Jährlich</span>
+                    <span>Monatlich</span>
                 </div>
                 <div class="card buffer">
                     <h3>Puffer</h3>
                     <p><span id="totalBuffer">0,00 €</span> <span id="yearBuffer" class="yearly-amount"></span></p>
-                    <span class="card-label">Monatlich / Jährlich</span>
+                    <span>Monatlich</span>
+                </div>
+                <div class="card settlement" id="settlementCard" style="display: none;">
+                    <h3>Ausgleich</h3>
+                    <p id="totalSettlement">0,00 €</p>
+                    <span id="settlementText">Ausgeglichen</span>
                 </div>
             </section>
 

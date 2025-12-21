@@ -6,6 +6,33 @@ let state = {
     savings: []
 };
 
+// Partner Mode State
+let currentView = 'main'; // 'main', 'partner', 'combined'
+
+const ACCOUNTS = {
+    main: [
+        'N26 (Hauptkonto)',
+        'N26 (Versicherungen)',
+        'N26 (Lifestyle)',
+        'N26 (Abos)',
+        'N26 (Rücklagen)',
+        'N26 (Urlaub)',
+        'N26 (Auto)',
+        'C24 (Mein Konto)',
+        'C24 (Gemeinschaftskonto)'
+    ],
+    partner: [
+        'C24 (Gemeinschaftskonto)',
+        'C24 (Persönliches Konto)',
+        'Postbank Konto'
+    ]
+};
+
+const SHARED_ACCOUNTS = [
+    'C24 (Gemeinschaftskonto)'
+];
+
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     loadData();
@@ -32,6 +59,31 @@ function initEventListeners() {
     document.getElementById('exportBtn').addEventListener('click', exportData);
     document.getElementById('importBtn').addEventListener('change', importData);
 }
+
+// View Switching
+window.switchView = function (view) {
+    currentView = view;
+
+    // Update Buttons
+    document.querySelectorAll('.btn-view').forEach(btn => btn.classList.remove('active'));
+    const btnId = 'view' + view.charAt(0).toUpperCase() + view.slice(1);
+    document.getElementById(btnId).classList.add('active');
+
+    // Show/Hide Settlement
+    const settlementCard = document.getElementById('settlementCard');
+    if (settlementCard) {
+        settlementCard.style.display = view === 'combined' ? 'block' : 'none';
+    }
+
+    updateDashboard();
+}
+
+function getFilteredState(listName) {
+    const list = state[listName] || [];
+    if (currentView === 'combined') return list;
+    return list.filter(item => item.owner === currentView);
+}
+
 
 // Precision helper (cents)
 const toCents = (val) => Math.round(parseFloat(val.toString().replace(',', '.')) * 100);
@@ -69,7 +121,8 @@ function calculateSummary() {
     let wealth = 0;
     let income = 0;
 
-    state.fixkosten.forEach(item => {
+    // Use Filtered Data for Summary
+    getFilteredState('fixkosten').forEach(item => {
         let monthly = item.amount;
         if (item.interval === 'Halbjährlich') monthly = Math.round(item.amount / 6);
         if (item.interval === 'Jährlich') monthly = Math.round(item.amount / 12);
@@ -79,9 +132,14 @@ function calculateSummary() {
         else fixed += monthly;
     });
 
-    state.budget.forEach(item => life += item.amount);
-    state.savings.forEach(item => wealth += item.amount);
-    state.income.forEach(item => income += item.amount);
+    getFilteredState('budget').forEach(item => life += item.amount);
+    getFilteredState('savings').forEach(item => wealth += item.amount);
+    getFilteredState('income').forEach(item => income += item.amount);
+
+    // Settlement Calculation (only relevant for Combined View)
+    if (currentView === 'combined') {
+        calculateSettlement();
+    }
 
     return {
         security,
@@ -91,6 +149,47 @@ function calculateSummary() {
         buffer: income - (security + fixed + life + wealth)
     };
 }
+
+function calculateSettlement() {
+    let partnerOwesMain = 0;
+    let mainOwesPartner = 0;
+
+    // Iterate over ALL entries to find cross-payments
+    ['fixkosten', 'budget', 'income', 'savings'].forEach(type => {
+        state[type].forEach(entry => {
+            // Check if account is shared (no debt if paid from shared)
+            const isSharedAccount = SHARED_ACCOUNTS.includes(entry.account);
+            if (isSharedAccount) return;
+
+            // Case 1: Partner's entry paid by Main
+            if (entry.owner === 'partner' && entry.paidBy === 'main') {
+                partnerOwesMain += entry.amount;
+            }
+            // Case 2: Main's entry paid by Partner
+            if (entry.owner === 'main' && entry.paidBy === 'partner') {
+                mainOwesPartner += entry.amount;
+            }
+        });
+    });
+
+    const diff = partnerOwesMain - mainOwesPartner;
+    const settlementEl = document.getElementById('totalSettlement');
+    const settlementText = document.getElementById('settlementText');
+
+    settlementEl.textContent = fromCents(Math.abs(diff)) + ' €';
+
+    if (diff > 0) {
+        settlementText.textContent = 'Partnerin schuldet dir';
+        settlementEl.style.color = '#30d158'; // Green (receiving)
+    } else if (diff < 0) {
+        settlementText.textContent = 'Du schuldest Partnerin';
+        settlementEl.style.color = '#ff453a'; // Red (paying)
+    } else {
+        settlementText.textContent = 'Ausgeglichen';
+        settlementEl.style.color = 'inherit';
+    }
+}
+
 
 function updateChart(summary) {
     const ctx = document.getElementById('budgetChart').getContext('2d');
@@ -140,7 +239,8 @@ function renderTable(type, fields) {
     const tbody = document.querySelector(`#${type}Table tbody`);
     tbody.innerHTML = '';
 
-    state[type].forEach(item => {
+    getFilteredState(type).forEach(item => {
+
         const tr = document.createElement('tr');
         fields.forEach(field => {
             const td = document.createElement('td');
@@ -186,76 +286,110 @@ window.showModal = function (type, id = null) {
 
     const item = id ? state[type].find(i => i.id === id) : null;
 
+    // Accounts based on Current View
+    const accounts = getAccountsForView();
+
+    // Split Checkbox: Show if it's a new entry OR if it's not a linked entry
+    // We hide split option for linked entries as they are managed via the main entry
+    const isLinked = item?.linkedId;
+    const showSplit = !isLinked && currentView !== 'combined'; // Avoid split in combined view to simplify owner logic
+
+    // Read-Only mode for linked entries
+    const readOnly = !!isLinked;
+    const readOnlyAttr = readOnly ? 'disabled' : '';
+
+    if (readOnly) {
+        title.textContent = 'Eintrag (automatisch verwaltet)';
+    }
+
     let fields = '';
+
+    // If read-only, we might want to show a notice
+    const notice = readOnly ? '<p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 15px;">Dieser Eintrag wird automatisch durch den Haupteintrag verwaltet.</p>' : '';
+
     if (type === 'fixkosten') {
         fields = `
-            ${createField('Bezeichnung', 'name', 'text', item?.name)}
-            ${createField('Betrag (€)', 'amount', 'text', item ? fromCents(item.amount) : '')}
+            ${notice}
+            ${createField('Bezeichnung', 'name', 'text', item?.name, readOnlyAttr)}
+            ${createField('Betrag (€)', 'amount', 'text', item ? fromCents(item.amount) : '', readOnlyAttr)}
             <div class="form-group">
                 <label>Intervall</label>
-                <select id="interval">
+                <select id="interval" ${readOnlyAttr}>
                     <option value="Monatlich" ${item?.interval === 'Monatlich' ? 'selected' : ''}>Monatlich</option>
                     <option value="Halbjährlich" ${item?.interval === 'Halbjährlich' ? 'selected' : ''}>Halbjährlich</option>
                     <option value="Jährlich" ${item?.interval === 'Jährlich' ? 'selected' : ''}>Jährlich</option>
                 </select>
-                </select>
             </div>
-            ${createCategorySelect(item?.category)}
-            ${createAccountSelect(item?.account)}
+            ${createCategorySelect(item?.category, readOnlyAttr)}
+            ${createAccountSelect(item?.account, accounts, readOnlyAttr)}
+            ${createSplitCheckbox(showSplit)}
         `;
     } else if (type === 'budget') {
         fields = `
-            ${createField('Bezeichnung', 'name', 'text', item?.name)}
-            ${createField('Monatlicher Betrag (€)', 'amount', 'text', item ? fromCents(item.amount) : '')}
-            ${createAccountSelect(item?.account)}
+            ${notice}
+            ${createField('Bezeichnung', 'name', 'text', item?.name, readOnlyAttr)}
+            ${createField('Monatlicher Betrag (€)', 'amount', 'text', item ? fromCents(item.amount) : '', readOnlyAttr)}
+            ${createAccountSelect(item?.account, accounts, readOnlyAttr)}
+            ${createSplitCheckbox(showSplit)}
         `;
     } else if (type === 'income') {
         fields = `
-            ${createField('Bezeichnung', 'name', 'text', item?.name)}
-            ${createField('Betrag (€)', 'amount', 'text', item ? fromCents(item.amount) : '')}
-            ${createAccountSelect(item?.account)}
+            ${notice}
+            ${createField('Bezeichnung', 'name', 'text', item?.name, readOnlyAttr)}
+            ${createField('Betrag (€)', 'amount', 'text', item ? fromCents(item.amount) : '', readOnlyAttr)}
+            ${createAccountSelect(item?.account, accounts, readOnlyAttr)}
         `;
     } else if (type === 'savings') {
         fields = `
-            ${createField('Bezeichnung', 'name', 'text', item?.name)}
-            ${createField('Betrag (€)', 'amount', 'text', item ? fromCents(item.amount) : '')}
+            ${notice}
+            ${createField('Bezeichnung', 'name', 'text', item?.name, readOnlyAttr)}
+            ${createField('Betrag (€)', 'amount', 'text', item ? fromCents(item.amount) : '', readOnlyAttr)}
             <div class="form-group">
                 <label>Typ</label>
-                <select id="type">
+                <select id="type" ${readOnlyAttr}>
                     <option value="Cash">Cash</option>
                     <option value="Sparplan">Sparplan</option>
                 </select>
             </div>
-            ${createAccountSelect(item?.account)}
+            ${createAccountSelect(item?.account, accounts, readOnlyAttr)}
+            ${createSplitCheckbox(showSplit)}
         `;
+    }
+
+    // Hide Save Button if Read Only
+    const footer = modal.querySelector('.modal-footer');
+    const saveBtn = footer.querySelector('button[type="submit"]');
+    if (readOnly) {
+        saveBtn.style.display = 'none';
+        // Add a "Delete" button if not exists or let table handle it? 
+        // Table handles delete.
+    } else {
+        saveBtn.style.display = 'block';
     }
 
     fieldsContainer.innerHTML = fields;
     modal.style.display = 'flex';
 }
 
-function createField(label, id, type, value) {
+
+function createField(label, id, type, value, attributes = '') {
     return `
         <div class="form-group">
             <label>${label}</label>
-            <input type="${type}" id="${id}" value="${value || ''}" required>
+            <input type="${type}" id="${id}" value="${value || ''}" required ${attributes}>
         </div>
     `;
 }
 
-function createAccountSelect(selectedValue) {
-    const accounts = [
-        'N26 (Hauptkonto)',
-        'N26 (Versicherungen)',
-        'N26 (Lifestyle)',
-        'N26 (Abos)',
-        'N26 (Rücklagen)',
-        'N26 (Urlaub)',
-        'N26 (Auto)',
-        'C24 (Mein Konto)',
-        'C24 (Gemeinschaftskonto)'
-    ];
 
+function getAccountsForView() {
+    if (currentView === 'partner') return ACCOUNTS.partner;
+    if (currentView === 'main') return ACCOUNTS.main;
+    // Combined or default
+    return [...new Set([...ACCOUNTS.main, ...ACCOUNTS.partner])];
+}
+
+function createAccountSelect(selectedValue, accounts, attributes = '') {
     const options = accounts.map(acc =>
         `<option value="${acc}" ${selectedValue === acc ? 'selected' : ''}>${acc}</option>`
     ).join('');
@@ -263,14 +397,25 @@ function createAccountSelect(selectedValue) {
     return `
         <div class="form-group">
             <label>Konto</label>
-            <select id="account" required>
+            <select id="account" required ${attributes}>
                 ${options}
             </select>
         </div>
     `;
 }
 
-function createCategorySelect(selectedValue) {
+function createSplitCheckbox(show) {
+    if (!show) return '';
+    return `
+        <div class="form-group checkbox-group" style="flex-direction: row; align-items: center; gap: 10px; margin-top: 10px;">
+            <input type="checkbox" id="isSplit">
+            <label for="isSplit" style="margin-bottom: 0;">Geteilte Ausgabe (50/50)</label>
+        </div>
+    `;
+}
+
+
+function createCategorySelect(selectedValue, attributes = '') {
     const categories = [
         'Versicherung',
         'Abo',
@@ -286,12 +431,13 @@ function createCategorySelect(selectedValue) {
     return `
         <div class="form-group">
             <label>Kategorie</label>
-            <select id="category" required>
+            <select id="category" required ${attributes}>
                 ${options}
             </select>
         </div>
     `;
 }
+
 
 window.closeModal = function () {
     document.getElementById('entryModal').style.display = 'none';
@@ -304,8 +450,12 @@ async function handleFormSubmit(e) {
 
     const entry = { id };
     const inputs = document.getElementById('formFields').querySelectorAll('input, select');
+    const isSplitCheckbox = document.getElementById('isSplit');
+    const isSplit = isSplitCheckbox ? isSplitCheckbox.checked : false;
 
     inputs.forEach(input => {
+        if (input.id === 'isSplit') return; // Handled separately
+
         if (input.type === 'checkbox') {
             entry[input.id] = input.checked;
         } else if (input.id === 'amount') {
@@ -314,6 +464,27 @@ async function handleFormSubmit(e) {
             entry[input.id] = input.value;
         }
     });
+
+    // Owner Assignment (if new entry or updating)
+    // If we are in 'combined', default owner to 'main' for safety, but usually we restrict split to non-combined
+    if (!entry.owner) {
+        entry.owner = (currentView === 'combined') ? 'main' : currentView;
+    }
+
+    // PaidBy Assignment (Client-side logic)
+    // We assume if account is from Main List (and not shared?), PaidBy = Main.
+    // If account is from Partner List (and not shared?), PaidBy = Partner.
+    // For Shared: We default to WHO created it (Owner). 
+    // Actually, "PaidBy" tracks whose money it was. Shared = "Main" (as per DB default) but ignored in calc.
+    // Simplifying: 
+    // If Account in ACCOUNTS.main -> PaidBy = Main
+    // If Account in ACCOUNTS.partner AND NOT in ACCOUNTS.main -> PaidBy = Partner
+    const account = entry.account;
+    if (ACCOUNTS.main.includes(account)) {
+        entry.paidBy = 'main';
+    } else {
+        entry.paidBy = 'partner';
+    }
 
     // Automatically set isSecurity based on category
     if (type === 'fixkosten' && entry.category === 'Versicherung') {
@@ -326,7 +497,7 @@ async function handleFormSubmit(e) {
         const response = await fetch('http://localhost:3001/api/entries', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, type, data: entry })
+            body: JSON.stringify({ id, type, data: entry, isSplit })
         });
 
         if (!response.ok) throw new Error('Failed to save entry');
@@ -339,6 +510,7 @@ async function handleFormSubmit(e) {
         alert('Fehler beim Speichern des Eintrags.');
     }
 }
+
 
 window.deleteEntry = async function (type, id) {
     try {
