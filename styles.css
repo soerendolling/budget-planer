@@ -90,7 +90,7 @@ h1 {
     font-weight: 600;
 }
 
-.card span {
+.card-label {
     font-size: 0.75rem;
     color: var(--text-secondary);
 }
