@@ -9,21 +9,23 @@ let state = {
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     loadData();
-    updateDashboard();
     initEventListeners();
 });
 
-function loadData() {
-    const savedData = localStorage.getItem('budgetData');
-    if (savedData) {
-        state = JSON.parse(savedData);
+async function loadData() {
+    try {
+        const response = await fetch('http://localhost:3001/api/entries');
+        if (!response.ok) throw new Error('Failed to load data');
+        state = await response.json();
+        updateDashboard();
+    } catch (err) {
+        console.error('Error loading data:', err);
+        // Fallback to empty state isn't strictly necessary as state is initialized empty
     }
 }
 
-function saveData() {
-    localStorage.setItem('budgetData', JSON.stringify(state));
-    updateDashboard();
-}
+// saveData is removed as we now save per-action via API calls
+
 
 function initEventListeners() {
     document.getElementById('entryForm').addEventListener('submit', handleFormSubmit);
@@ -265,7 +267,7 @@ window.closeModal = function () {
     document.getElementById('entryModal').style.display = 'none';
 }
 
-function handleFormSubmit(e) {
+async function handleFormSubmit(e) {
     e.preventDefault();
     const type = document.getElementById('entryType').value;
     const id = document.getElementById('entryId').value || Date.now().toString();
@@ -283,20 +285,37 @@ function handleFormSubmit(e) {
         }
     });
 
-    if (document.getElementById('entryId').value) {
-        const index = state[type].findIndex(i => i.id === id);
-        state[type][index] = entry;
-    } else {
-        state[type].push(entry);
-    }
+    try {
+        const response = await fetch('http://localhost:3001/api/entries', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, type, data: entry })
+        });
 
-    saveData();
-    closeModal();
+        if (!response.ok) throw new Error('Failed to save entry');
+
+        // Reload data to ensure sync with server
+        await loadData();
+        closeModal();
+    } catch (err) {
+        console.error('Error saving entry:', err);
+        alert('Fehler beim Speichern des Eintrags.');
+    }
 }
 
-window.deleteEntry = function (type, id) {
-    state[type] = state[type].filter(i => i.id !== id);
-    saveData();
+window.deleteEntry = async function (type, id) {
+    try {
+        const response = await fetch(`http://localhost:3001/api/entries/${id}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) throw new Error('Failed to delete entry');
+
+        await loadData();
+    } catch (err) {
+        console.error('Error deleting entry:', err);
+        alert('Fehler beim Löschen des Eintrags.');
+    }
 }
 
 window.editEntry = function (type, id) {
