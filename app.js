@@ -65,7 +65,8 @@ function calculateSummary() {
         if (item.interval === 'Halbjährlich') monthly = Math.round(item.amount / 6);
         if (item.interval === 'Jährlich') monthly = Math.round(item.amount / 12);
 
-        if (item.isSecurity) security += monthly;
+        // Security is now determined by category 'Versicherung'
+        if (item.category === 'Versicherung') security += monthly;
         else fixed += monthly;
     });
 
@@ -120,7 +121,7 @@ function updateChart(summary) {
 
 // Table Rendering
 function renderTables() {
-    renderTable('fixkosten', ['name', 'amount', 'interval', 'category', 'account', 'isSecurity']);
+    renderTable('fixkosten', ['name', 'amount', 'interval', 'category', 'account']);
     renderTable('budget', ['name', 'amount', 'account']);
     renderTable('income', ['name', 'amount', 'account']);
     renderTable('savings', ['name', 'amount', 'type', 'account']);
@@ -188,13 +189,10 @@ window.showModal = function (type, id = null) {
                     <option value="Halbjährlich" ${item?.interval === 'Halbjährlich' ? 'selected' : ''}>Halbjährlich</option>
                     <option value="Jährlich" ${item?.interval === 'Jährlich' ? 'selected' : ''}>Jährlich</option>
                 </select>
+                </select>
             </div>
-            ${createField('Kategorie', 'category', 'text', item?.category)}
+            ${createCategorySelect(item?.category)}
             ${createAccountSelect(item?.account)}
-            <div class="form-group checkbox-group">
-                <input type="checkbox" id="isSecurity" ${item?.isSecurity ? 'checked' : ''}>
-                <label for="isSecurity">Grund-/Sicherheit</label>
-            </div>
         `;
     } else if (type === 'budget') {
         fields = `
@@ -263,6 +261,29 @@ function createAccountSelect(selectedValue) {
     `;
 }
 
+function createCategorySelect(selectedValue) {
+    const categories = [
+        'Versicherung',
+        'Abo',
+        'Verein',
+        'Auto',
+        'Wohnung'
+    ];
+
+    const options = categories.map(cat =>
+        `<option value="${cat}" ${selectedValue === cat ? 'selected' : ''}>${cat}</option>`
+    ).join('');
+
+    return `
+        <div class="form-group">
+            <label>Kategorie</label>
+            <select id="category" required>
+                ${options}
+            </select>
+        </div>
+    `;
+}
+
 window.closeModal = function () {
     document.getElementById('entryModal').style.display = 'none';
 }
@@ -284,6 +305,13 @@ async function handleFormSubmit(e) {
             entry[input.id] = input.value;
         }
     });
+
+    // Automatically set isSecurity based on category
+    if (type === 'fixkosten' && entry.category === 'Versicherung') {
+        entry.isSecurity = true;
+    } else {
+        entry.isSecurity = false;
+    }
 
     try {
         const response = await fetch('http://localhost:3001/api/entries', {
