@@ -295,10 +295,8 @@ function handleFormSubmit(e) {
 }
 
 window.deleteEntry = function (type, id) {
-    if (confirm('Diesen Eintrag wirklich löschen?')) {
-        state[type] = state[type].filter(i => i.id !== id);
-        saveData();
-    }
+    state[type] = state[type].filter(i => i.id !== id);
+    saveData();
 }
 
 window.editEntry = function (type, id) {
