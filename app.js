@@ -44,10 +44,19 @@ function updateDashboard() {
     const summary = calculateSummary();
 
     document.getElementById('totalSecurity').textContent = fromCents(summary.security) + ' €';
+    document.getElementById('yearSecurity').textContent = fromCents(summary.security * 12) + ' €';
+
     document.getElementById('totalFixed').textContent = fromCents(summary.fixed) + ' €';
+    document.getElementById('yearFixed').textContent = fromCents(summary.fixed * 12) + ' €';
+
     document.getElementById('totalLife').textContent = fromCents(summary.life) + ' €';
+    document.getElementById('yearLife').textContent = fromCents(summary.life * 12) + ' €';
+
     document.getElementById('totalWealth').textContent = fromCents(summary.wealth) + ' €';
+    document.getElementById('yearWealth').textContent = fromCents(summary.wealth * 12) + ' €';
+
     document.getElementById('totalBuffer').textContent = fromCents(summary.buffer) + ' €';
+    document.getElementById('yearBuffer').textContent = fromCents(summary.buffer * 12) + ' €';
 
     updateChart(summary);
     renderTables();

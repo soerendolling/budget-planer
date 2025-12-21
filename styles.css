@@ -95,6 +95,13 @@ h1 {
     color: var(--text-secondary);
 }
 
+.yearly-amount {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+    margin-left: 8px;
+}
+
 .card.security {
     border-top: 4px solid var(--accent-indigo);
 }
