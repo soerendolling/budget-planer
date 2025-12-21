@@ -236,13 +236,15 @@ function createField(label, id, type, value) {
 
 function createAccountSelect(selectedValue) {
     const accounts = [
-        'N26 Standard',
-        'N26 Metal',
-        'Cash',
-        'Sparkasse',
-        'DKB',
-        'Trade Republic',
-        'Crypto.com'
+        'N26 (Hauptkonto)',
+        'N26 (Versicherungen)',
+        'N26 (Lifestyle)',
+        'N26 (Abos)',
+        'N26 (Rücklagen)',
+        'N26 (Urlaub)',
+        'N26 (Auto)',
+        'C24 (Mein Konto)',
+        'C24 (Gemeinschaftskonto)'
     ];
 
     const options = accounts.map(acc =>
