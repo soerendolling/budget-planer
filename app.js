@@ -250,36 +250,29 @@ function calculateAccountBalances() {
 function renderAccountOverview() {
     const balances = calculateAccountBalances();
     const container = document.getElementById('accountCards');
+
+    // Ensure container has list styling class
+    container.className = 'account-list-container';
     container.innerHTML = '';
 
-    // Sort accounts alphabetically or by defined order? 
-    // Let's us defined order from ACCOUNTS if possible, or just keys.
     const sortedAccounts = Object.keys(balances).sort();
 
     sortedAccounts.forEach(accountName => {
-        const { income, expenses } = balances[accountName];
-        const balance = income - expenses; // Expenses are positive numbers in DB usually, so we subtract
+        const { expenses } = balances[accountName];
 
-        const card = document.createElement('div');
-        card.className = 'account-card';
-        card.innerHTML = `
-            <h3>${accountName}</h3>
-            <div class="account-row income">
-                <span>Einkommen</span>
-                <span>+${fromCents(income)} €</span>
-            </div>
-            <div class="account-row expenses">
-                <span>Ausgaben</span>
-                <span>-${fromCents(expenses)} €</span>
-            </div>
-            <div class="account-balance">
-                <span>Prognose</span>
-                <span class="balance-amount ${balance >= 0 ? 'positive' : 'negative'}">
-                    ${balance >= 0 ? '+' : ''}${fromCents(balance)} €
-                </span>
-            </div>
+        // Show only accounts that have expenses (> 0)
+        if (expenses <= 0) return;
+
+        const row = document.createElement('div');
+        row.className = 'account-list-item';
+
+        row.innerHTML = `
+            <span class="account-name">${accountName}</span>
+            <span class="account-result negative">
+                -${fromCents(expenses)} €
+            </span>
         `;
-        container.appendChild(card);
+        container.appendChild(row);
     });
 }
 
