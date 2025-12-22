@@ -47,6 +47,28 @@ function initEventListeners() {
     document.getElementById('entryForm').addEventListener('submit', handleFormSubmit);
     document.getElementById('exportBtn').addEventListener('click', exportData);
     document.getElementById('importBtn').addEventListener('change', importData);
+
+    document.getElementById('accountForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('accId').value || Date.now().toString();
+        const name = document.getElementById('accName').value;
+        const owner = document.getElementById('accOwner').value;
+        const iban = document.getElementById('accIban').value;
+
+        try {
+            await fetch('http://localhost:3001/api/accounts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, name, owner, iban })
+            });
+            await loadData();
+            renderAccountMgmtList();
+            document.getElementById('accountForm').reset();
+            document.getElementById('accId').value = '';
+        } catch (err) {
+            console.error(err);
+        }
+    });
 }
 
 // View Switching
@@ -255,6 +277,9 @@ function renderAccountOverview() {
         // Show only accounts that have expenses (> 0)
         if (expenses <= 0) return;
 
+        // Skip 'Unzugeordnet' from the Bank Account View
+        if (accountName === 'Unzugeordnet') return;
+
         // Find account details for IBAN
         const accDetails = state.accounts.find(a => a.name === accountName);
         let ibanDisplay = '';
@@ -360,6 +385,12 @@ function renderTable(type, fields) {
                 td.innerHTML = text;
             } else if (field === 'isSecurity') {
                 td.textContent = item[field] ? 'Ja' : 'Nein';
+            } else if (field === 'account') {
+                if (item[field] === 'Unzugeordnet') {
+                    td.innerHTML = `<span class="badge-warning">⚠️ Unzugeordnet</span>`;
+                } else {
+                    td.textContent = item[field];
+                }
             } else {
                 td.textContent = item[field];
             }

@@ -280,13 +280,30 @@ app.post('/api/accounts', (req, res) => {
 });
 
 // DELETE account
+// DELETE account
 app.delete('/api/accounts/:id', (req, res) => {
-    db.run("DELETE FROM accounts WHERE id = ?", req.params.id, function (err) {
-        if (err) {
-            res.status(400).json({ "error": err.message });
-            return;
-        }
-        res.json({ message: "deleted", changes: this.changes });
+    const id = req.params.id;
+
+    // First get the name to migrate entries
+    db.get("SELECT name FROM accounts WHERE id = ?", [id], (err, row) => {
+        if (err) return res.status(400).json({ "error": err.message });
+        if (!row) return res.status(404).json({ "error": "Account not found" });
+
+        const accName = row.name;
+
+        // Migrate entries to 'Unzugeordnet'
+        db.run("UPDATE entries SET account = 'Unzugeordnet' WHERE account = ?", [accName], (err) => {
+            if (err) return res.status(400).json({ "error": err.message });
+
+            // Now delete the account
+            db.run("DELETE FROM accounts WHERE id = ?", [id], function (err) {
+                if (err) {
+                    res.status(400).json({ "error": err.message });
+                    return;
+                }
+                res.json({ message: "deleted", changes: this.changes });
+            });
+        });
     });
 });
 
