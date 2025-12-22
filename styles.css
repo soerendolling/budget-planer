@@ -434,8 +434,30 @@ td {
     color: var(--accent-emerald);
 }
 
-.account-result.negative {
-    color: var(--danger);
+.account-mgmt-list {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.account-mgmt-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.iban-display {
+    font-family: monospace;
+    color: var(--text-secondary);
+    margin-left: 8px;
+    font-size: 0.8rem;
 }
 
 .amount-detail {

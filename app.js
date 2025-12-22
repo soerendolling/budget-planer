@@ -3,35 +3,12 @@ let state = {
     fixkosten: [],
     budget: [],
     income: [],
-    savings: []
+    savings: [],
+    accounts: []
 };
 
 // Partner Mode State
 let currentView = 'main'; // 'main', 'partner', 'combined'
-
-const ACCOUNTS = {
-    main: [
-        'N26 (Hauptkonto)',
-        'N26 (Versicherungen)',
-        'N26 (Lifestyle)',
-        'N26 (Abos)',
-        'N26 (Rücklagen)',
-        'N26 (Urlaub)',
-        'N26 (Auto)',
-        'C24 (Mein Konto)',
-        'C24 (Gemeinschaftskonto)'
-    ],
-    partner: [
-        'C24 (Gemeinschaftskonto)',
-        'C24 (Persönliches Konto)',
-        'Postbank Konto'
-    ]
-};
-
-const SHARED_ACCOUNTS = [
-    'C24 (Gemeinschaftskonto)'
-];
-
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
@@ -41,13 +18,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadData() {
     try {
+        // Load Accounts First
+        const accResponse = await fetch('http://localhost:3001/api/accounts');
+        if (accResponse.ok) {
+            state.accounts = await accResponse.json();
+        }
+
         const response = await fetch('http://localhost:3001/api/entries');
         if (!response.ok) throw new Error('Failed to load data');
-        state = await response.json();
+        const data = await response.json();
+
+        // Merge entries into state
+        state.fixkosten = data.fixkosten;
+        state.budget = data.budget;
+        state.income = data.income;
+        state.savings = data.savings;
+
         updateDashboard();
     } catch (err) {
         console.error('Error loading data:', err);
-        // Fallback to empty state isn't strictly necessary as state is initialized empty
     }
 }
 
@@ -175,8 +164,7 @@ function calculateSettlement() {
     ['fixkosten', 'budget', 'income', 'savings'].forEach(type => {
         state[type].forEach(entry => {
             // Check if account is shared (no debt if paid from shared)
-            const isSharedAccount = SHARED_ACCOUNTS.includes(entry.account);
-            if (isSharedAccount) return;
+            if (isSharedAccount(entry.account)) return;
 
             // Case 1: Partner's entry paid by Main
             if (entry.owner === 'partner' && entry.paidBy === 'main') {
@@ -223,9 +211,10 @@ function calculateAccountBalances() {
         // 2. If it's a Personal Account: Only the Payer (Primary Entry) counts the expense.
         //    The Receiver (Linked Entry) filters out because it's just a budget shadow, not a bank hit.
 
-        const isSharedAccount = SHARED_ACCOUNTS.includes(item.account);
+        // Fix: Use helper function as SHARED_ACCOUNTS constant was removed
+        const isShared = isSharedAccount(item.account);
 
-        if (!isSharedAccount && item.linkedId) {
+        if (!isShared && item.linkedId) {
             // It's a shadow entry on a personal account (e.g. Partner's split share of a dinner I paid).
             // It does not hit the Partner's bank account directly.
             return;
@@ -266,11 +255,21 @@ function renderAccountOverview() {
         // Show only accounts that have expenses (> 0)
         if (expenses <= 0) return;
 
+        // Find account details for IBAN
+        const accDetails = state.accounts.find(a => a.name === accountName);
+        let ibanDisplay = '';
+        if (accDetails && accDetails.iban && accDetails.iban.length > 4) {
+            ibanDisplay = `<span style="font-family:monospace; color:#888; font-size:0.8rem; margin-left:8px;">*${accDetails.iban.slice(-5)}</span>`;
+        }
+
         const row = document.createElement('div');
         row.className = 'account-list-item';
 
         row.innerHTML = `
-            <span class="account-name">${accountName}</span>
+            <div style="display:flex; align-items:center;">
+                <span class="account-name">${accountName}</span>
+                ${ibanDisplay}
+            </div>
             <span class="account-result negative">
                 -${fromCents(expenses)} €
             </span>
@@ -559,14 +558,31 @@ function getMainEntryLocation(type, linkedId) {
 
 
 function getAccountsForView() {
-    if (currentView === 'partner') return ACCOUNTS.partner;
-    if (currentView === 'main') return ACCOUNTS.main;
-    if (currentView === 'combined') return SHARED_ACCOUNTS;
-    // Default fallback
-    return [...new Set([...ACCOUNTS.main, ...ACCOUNTS.partner])];
+    // Filter accounts based on currentView owner, or if combined return all? 
+    // Originally: Combined returned only shared? No, "combined" view might need to see all?
+    // Wait, original logic: Combined -> Shared Accounts.
+    // Let's stick to original logic:
+
+    if (currentView === 'combined') {
+        return state.accounts.filter(a => a.owner === 'shared').map(a => a.name);
+    }
+
+    // For 'main' and 'partner', we show their own accounts AND shared accounts?
+    // Original ACCOUNTS.main included 'C24 (Gemeinschaftskonto)' which is shared.
+    // So logic: Account Owner matches View OR Account Owner is Shared.
+
+    return state.accounts
+        .filter(a => a.owner === currentView || a.owner === 'shared')
+        .map(a => a.name);
+}
+
+function isSharedAccount(accountName) {
+    const acc = state.accounts.find(a => a.name === accountName);
+    return acc && acc.owner === 'shared';
 }
 
 function createAccountSelect(selectedValue, accounts, attributes = '') {
+    // accounts is list of names from getAccountsForView
     const options = accounts.map(acc =>
         `<option value="${acc}" ${selectedValue === acc ? 'selected' : ''}>${acc}</option>`
     ).join('');
@@ -592,7 +608,118 @@ function createSplitCheckbox(show, isChecked) {
 }
 
 
+// Account Management Functions
 
+window.openAccountModal = function () {
+    renderAccountMgmtList();
+    document.getElementById('accountForm').reset();
+    document.getElementById('accId').value = '';
+    document.getElementById('accountModal').style.display = 'flex';
+}
+
+window.closeAccountModal = function () {
+    document.getElementById('accountModal').style.display = 'none';
+}
+
+function renderAccountMgmtList() {
+    const list = document.getElementById('accountList');
+    list.innerHTML = '';
+
+    // Filter accounts based on View:
+    // Main View -> Main + Shared
+    // Partner View -> Partner + Shared
+    // Combined View -> Shared Only (consistent with other logic)
+    const filteredAccounts = state.accounts.filter(acc => {
+        if (currentView === 'combined') return acc.owner === 'shared';
+        return acc.owner === currentView || acc.owner === 'shared';
+    });
+
+    filteredAccounts.forEach(acc => {
+        const div = document.createElement('div');
+        div.className = 'account-mgmt-item';
+        div.innerHTML = `
+            <div>
+                <strong>${acc.name}</strong> 
+                <span style="font-size: 0.8rem; color: #888;">(${acc.owner})</span>
+                ${acc.iban ? `<div class="iban-display">${acc.iban}</div>` : ''}
+            </div>
+            <div style="display: flex; gap: 5px;">
+                <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="editAccount('${acc.id}')">Edit</button>
+                <button class="btn-danger" style="padding: 4px 8px; font-size: 0.75rem;" onclick="deleteAccount('${acc.id}')">X</button>
+            </div>
+        `;
+        list.appendChild(div);
+    });
+
+    // Also update the Owner Select options to match allowed types
+    const ownerSelect = document.getElementById('accOwner');
+    if (currentView === 'main') {
+        ownerSelect.innerHTML = `<option value="main">Ich</option><option value="shared">Gemeinsam</option>`;
+    } else if (currentView === 'partner') {
+        ownerSelect.innerHTML = `<option value="partner">Partnerin</option><option value="shared">Gemeinsam</option>`;
+    } else {
+        ownerSelect.innerHTML = `<option value="shared">Gemeinsam</option>`;
+    }
+}
+
+window.editAccount = function (id) {
+    const acc = state.accounts.find(a => a.id === id);
+    if (!acc) return;
+
+    document.getElementById('accId').value = acc.id;
+    document.getElementById('accName').value = acc.name;
+    document.getElementById('accOwner').value = acc.owner;
+    document.getElementById('accIban').value = acc.iban || '';
+}
+
+window.deleteAccount = async function (id) {
+    const acc = state.accounts.find(a => a.id === id);
+    if (!acc) return;
+
+    // Check usage
+    let count = 0;
+    ['fixkosten', 'budget', 'income', 'savings'].forEach(type => {
+        count += state[type].filter(e => e.account === acc.name).length;
+    });
+
+    if (count > 0) {
+        if (!confirm(`Achtung: Es existieren ${count} Einträge für dieses Konto ("${acc.name}").\nDiese werden auf "Unzugeordnet" zurückgesetzt.\n\nWirklich löschen?`)) {
+            return;
+        }
+    } else {
+        if (!confirm(`Konto "${acc.name}" wirklich löschen?`)) return;
+    }
+
+    try {
+        await fetch(`http://localhost:3001/api/accounts/${id}`, { method: 'DELETE' });
+        await loadData(); // Reloads accounts and entries
+        renderAccountMgmtList();
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+document.getElementById('accountForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('accId').value || Date.now().toString();
+    const name = document.getElementById('accName').value;
+    const owner = document.getElementById('accOwner').value;
+    const iban = document.getElementById('accIban').value;
+
+    try {
+        await fetch('http://localhost:3001/api/accounts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, name, owner, iban })
+        });
+        await loadData();
+        renderAccountMgmtList();
+        document.getElementById('accountForm').reset();
+        document.getElementById('accId').value = '';
+    } catch (err) {
+        console.error(err);
+    }
+});
 function createCategorySelect(selectedValue, attributes = '') {
     const categories = [
         'Versicherung',
@@ -659,10 +786,21 @@ async function handleFormSubmit(e) {
     // If Account in ACCOUNTS.main -> PaidBy = Main
     // If Account in ACCOUNTS.partner AND NOT in ACCOUNTS.main -> PaidBy = Partner
     const account = entry.account;
-    if (ACCOUNTS.main.includes(account)) {
+    // PaidBy Assignment (Client-side logic)
+    // Map account name to owner to determine payer
+    const selectedAcc = state.accounts.find(a => a.name === entry.account);
+    const accOwner = selectedAcc ? selectedAcc.owner : 'main'; // Fallback
+
+    if (accOwner === 'main') {
         entry.paidBy = 'main';
-    } else {
+    } else if (accOwner === 'partner') {
         entry.paidBy = 'partner';
+    } else {
+        // Shared Account? Default to who submitted it (currentView) or Main?
+        // Original logic: "PaidBy tracks whose money it was. Shared = Main (default)".
+        // Let's stick to 'main' for Shared unless we want to track who deposited?
+        // Actually, if it's shared, paidBy is less relevant for debt calculation (ignored).
+        entry.paidBy = 'main';
     }
 
     // Automatically set isSecurity based on category

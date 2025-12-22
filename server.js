@@ -24,7 +24,7 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
 });
 
 function initDb() {
-    // Basic Table
+    // Basic Table: Entries
     db.run(`CREATE TABLE IF NOT EXISTS entries (
         id TEXT PRIMARY KEY,
         group_type TEXT,
@@ -51,6 +51,40 @@ function initDb() {
                     console.log('Migration note:', err.message);
                 }
             });
+        });
+    });
+
+    // Accounts Table
+    db.run(`CREATE TABLE IF NOT EXISTS accounts (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        owner TEXT,
+        iban TEXT
+    )`, () => {
+        // Seed Default Accounts if empty
+        db.get("SELECT count(*) as count FROM accounts", [], (err, row) => {
+            if (err) return console.error(err);
+            if (row.count === 0) {
+                console.log("Seeding default accounts...");
+                const stmt = db.prepare("INSERT INTO accounts (id, name, owner, iban) VALUES (?, ?, ?, ?)");
+
+                const defaults = [
+                    ['a1', 'N26 (Hauptkonto)', 'main', ''],
+                    ['a2', 'N26 (Versicherungen)', 'main', ''],
+                    ['a3', 'N26 (Lifestyle)', 'main', ''],
+                    ['a4', 'N26 (Abos)', 'main', ''],
+                    ['a5', 'N26 (Rücklagen)', 'main', ''],
+                    ['a6', 'N26 (Urlaub)', 'main', ''],
+                    ['a7', 'N26 (Auto)', 'main', ''],
+                    ['a8', 'C24 (Mein Konto)', 'main', ''],
+                    ['a9', 'C24 (Gemeinschaftskonto)', 'shared', ''],
+                    ['a10', 'C24 (Persönliches Konto)', 'partner', ''],
+                    ['a11', 'Postbank Konto', 'partner', '']
+                ];
+
+                defaults.forEach(acc => stmt.run(acc));
+                stmt.finalize();
+            }
         });
     });
 }
@@ -219,9 +253,35 @@ app.post('/api/entries', (req, res) => {
 });
 
 // DELETE
-app.delete('/api/entries/:id', (req, res) => {
-    // Delete the entry AND any entry linked to it (cascade delete for split entries)
-    db.run("DELETE FROM entries WHERE id = ? OR linked_id = ?", [req.params.id, req.params.id], function (err) {
+// Accounts API
+
+// GET accounts
+app.get('/api/accounts', (req, res) => {
+    db.all("SELECT * FROM accounts", [], (err, rows) => {
+        if (err) {
+            res.status(400).json({ "error": err.message });
+            return;
+        }
+        res.json(rows);
+    });
+});
+
+// POST (Create/Update) account
+app.post('/api/accounts', (req, res) => {
+    const { id, name, owner, iban } = req.body;
+    const sql = `INSERT OR REPLACE INTO accounts (id, name, owner, iban) VALUES (?, ?, ?, ?)`;
+    db.run(sql, [id, name, owner, iban], (err) => {
+        if (err) {
+            res.status(400).json({ "error": err.message });
+            return;
+        }
+        res.json({ message: "success", id });
+    });
+});
+
+// DELETE account
+app.delete('/api/accounts/:id', (req, res) => {
+    db.run("DELETE FROM accounts WHERE id = ?", req.params.id, function (err) {
         if (err) {
             res.status(400).json({ "error": err.message });
             return;
