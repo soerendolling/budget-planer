@@ -119,6 +119,7 @@ function updateDashboard() {
 
     updateChart(summary);
     renderTables();
+    renderAccountOverview();
 }
 
 function calculateSummary() {
@@ -204,6 +205,82 @@ function calculateSettlement() {
         settlementText.textContent = 'Ausgeglichen';
         settlementEl.style.color = 'inherit';
     }
+}
+
+// Account Overview Logic
+function calculateAccountBalances() {
+    const balances = {};
+    const processItem = (item, type) => {
+        // Skip shared entries if they are just placeholders (though logic below handles amounts correctly)
+        // Similar filter logic as calculateSummary but per account
+
+        let monthly = item.amount;
+        if (item.interval === 'Halbjährlich') monthly = Math.round(item.amount / 6);
+        if (item.interval === 'Jährlich') monthly = Math.round(item.amount / 12);
+
+        // Handle Shared Entries Logic for "My View" (Main)
+        // If I am main, and I see a shared entry that is MINE (owner=main or owner=shared..wait)
+        // If owner='shared' -> It's the master entry, usually only in combined view.
+        // If owner='main' and isShared=1 and linkedId=null -> It's my half.
+        // If owner='main' and isShared=1 and linkedId!=null -> It's a partner split (shouldnt happen for owner=main usually unless I paid and it's split?)
+
+        // Simplified: use what's in the filtered list (which respects view owners).
+        // But wait, getFilteredState already filters by owner = currentView.
+        // So we just sum up what we see.
+
+        if (!balances[item.account]) {
+            balances[item.account] = { income: 0, expenses: 0 };
+        }
+
+        if (type === 'income') {
+            balances[item.account].income += monthly;
+        } else {
+            balances[item.account].expenses += monthly;
+        }
+    };
+
+    getFilteredState('fixkosten').forEach(i => processItem(i, 'fixkosten'));
+    getFilteredState('budget').forEach(i => processItem(i, 'budget'));
+    getFilteredState('income').forEach(i => processItem(i, 'income'));
+    getFilteredState('savings').forEach(i => processItem(i, 'savings'));
+
+    return balances;
+}
+
+function renderAccountOverview() {
+    const balances = calculateAccountBalances();
+    const container = document.getElementById('accountCards');
+    container.innerHTML = '';
+
+    // Sort accounts alphabetically or by defined order? 
+    // Let's us defined order from ACCOUNTS if possible, or just keys.
+    const sortedAccounts = Object.keys(balances).sort();
+
+    sortedAccounts.forEach(accountName => {
+        const { income, expenses } = balances[accountName];
+        const balance = income - expenses; // Expenses are positive numbers in DB usually, so we subtract
+
+        const card = document.createElement('div');
+        card.className = 'account-card';
+        card.innerHTML = `
+            <h3>${accountName}</h3>
+            <div class="account-row income">
+                <span>Einkommen</span>
+                <span>+${fromCents(income)} €</span>
+            </div>
+            <div class="account-row expenses">
+                <span>Ausgaben</span>
+                <span>-${fromCents(expenses)} €</span>
+            </div>
+            <div class="account-balance">
+                <span>Prognose</span>
+                <span class="balance-amount ${balance >= 0 ? 'positive' : 'negative'}">
+                    ${balance >= 0 ? '+' : ''}${fromCents(balance)} €
+                </span>
+            </div>
+        `;
+        container.appendChild(card);
+    });
 }
 
 

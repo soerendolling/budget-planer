@@ -378,3 +378,77 @@ td {
         grid-template-columns: 1fr 1fr;
     }
 }
+
+/* Account Overview */
+.account-overview {
+    margin-bottom: 40px;
+}
+
+.account-overview h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: var(--text-primary);
+}
+
+.account-cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.account-card {
+    background: var(--card-bg);
+    padding: 24px;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    transition: var(--transition);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.account-card h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.account-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 0.875rem;
+}
+
+.account-row.income {
+    color: var(--accent-emerald);
+}
+
+.account-row.expenses {
+    color: var(--danger);
+}
+
+.account-balance {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+}
+
+.balance-amount {
+    font-size: 1.25rem;
+}
+
+.balance-amount.positive {
+    color: var(--accent-emerald);
+}
+
+.balance-amount.negative {
+    color: var(--danger);
+}
