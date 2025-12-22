@@ -113,13 +113,6 @@ app.post('/api/entries', (req, res) => {
     const paidBy = data.paidBy || 'main';
     let amount = data.amount;
 
-    // Split Logic: If split, we NO LONGER halve the amount for the main entry.
-    // The main entry keeps the full amount (for bank reconciliation).
-    // The partner entry will get half.
-    if (isSplit) {
-        // amount remains data.amount
-    }
-
     // SQLite Booleans are 0/1
     const isSecurity = data.isSecurity ? 1 : 0;
     const isShared = (isSplit || data.isShared) ? 1 : 0;
@@ -127,6 +120,59 @@ app.post('/api/entries', (req, res) => {
     const stmt = db.prepare(`INSERT OR REPLACE INTO entries 
         (id, group_type, name, amount, account, interval, category, is_security, savings_type, owner, paid_by, is_shared, linked_id) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+
+    // Special Handling for Shared Account Initial Creation (owner === 'shared')
+    if (owner === 'shared') {
+        // 1. Create Master Entry (100% Amount, Owner='shared')
+        stmt.run(
+            id, type, data.name, amount, data.account,
+            data.interval || null, data.category || null,
+            isSecurity, data.type || null,
+            'shared', 'main', 1, null, // Owner=shared, PaidBy=main(default), IsShared=1
+            (err) => {
+                if (err) {
+                    res.status(400).json({ "error": err.message });
+                    return;
+                }
+
+                // 2. Create Linked Main Entry (50%, Owner='main')
+                const mainId = id + '_main';
+                stmt.run(
+                    mainId, type, data.name, Math.round(amount / 2), data.account,
+                    data.interval || null, data.category || null,
+                    isSecurity, data.type || null,
+                    'main', 'main', 1, id, // Linked to Master
+                    (err) => { if (err) console.error("Error creating main split:", err); }
+                );
+
+                // 3. Create Linked Partner Entry (50%, Owner='partner')
+                const partnerId = id + '_partner';
+                stmt.run(
+                    partnerId, type, data.name, Math.round(amount / 2), data.account,
+                    data.interval || null, data.category || null,
+                    isSecurity, data.type || null,
+                    'partner', 'main', 1, id, // Linked to Master
+                    (err) => {
+                        if (err) console.error("Error creating partner split:", err);
+                        // Finalize after last insert
+                        stmt.finalize();
+                        res.json({ "message": "success", "id": id });
+                    }
+                );
+            }
+        );
+        return; // EXIT early, do not run standard logic below
+    }
+
+    // Standard Logic for Normal Entries (Owner = 'main' or 'partner')
+    // Split Logic: If split, we NO LONGER halve the amount for the main entry.
+    // The main entry keeps the full amount (for bank reconciliation).
+    // The partner entry will get half.
+    if (isSplit) {
+        // amount remains data.amount
+    }
+
+
 
     // 1. Run Main Insert
     stmt.run(

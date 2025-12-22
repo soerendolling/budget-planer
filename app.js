@@ -80,7 +80,14 @@ window.switchView = function (view) {
 
 function getFilteredState(listName) {
     const list = state[listName] || [];
-    if (currentView === 'combined') return list;
+    if (currentView === 'combined') {
+        // Filter out splits that belong to a 'shared' master entry to avoid double counting
+        const sharedMasterIds = new Set(list.filter(i => i.owner === 'shared').map(i => i.id));
+        return list.filter(item => {
+            if (item.linkedId && sharedMasterIds.has(item.linkedId)) return false;
+            return true;
+        });
+    }
     return list.filter(item => item.owner === currentView);
 }
 
@@ -129,10 +136,10 @@ function calculateSummary() {
 
         // Logic Change for Shared Entries:
         // If it is a shared entry AND it is the main/source entry (no linkedId),
-        // we display the FULL amount in the list (for bank checks), but for the 
-        // summary/budget calculation, we only count HALF (your share).
+        // AND it is NOT a 'shared' account entry (which is 100% shared expense),
+        // we count HALF (your share).
         // Partner entries (linkedId exists) are already halved in the DB.
-        if (item.isShared && !item.linkedId) {
+        if (item.isShared && !item.linkedId && item.owner !== 'shared') {
             monthly = Math.round(monthly / 2);
         }
 
@@ -397,7 +404,8 @@ function createField(label, id, type, value, attributes = '') {
 function getAccountsForView() {
     if (currentView === 'partner') return ACCOUNTS.partner;
     if (currentView === 'main') return ACCOUNTS.main;
-    // Combined or default
+    if (currentView === 'combined') return SHARED_ACCOUNTS;
+    // Default fallback
     return [...new Set([...ACCOUNTS.main, ...ACCOUNTS.partner])];
 }
 
@@ -480,8 +488,9 @@ async function handleFormSubmit(e) {
 
     // Owner Assignment (if new entry or updating)
     // If we are in 'combined', default owner to 'main' for safety, but usually we restrict split to non-combined
+    // If we are in 'combined', we now treat it as a 'shared' entry creation
     if (!entry.owner) {
-        entry.owner = (currentView === 'combined') ? 'main' : currentView;
+        entry.owner = (currentView === 'combined') ? 'shared' : currentView;
     }
 
     // PaidBy Assignment (Client-side logic)
