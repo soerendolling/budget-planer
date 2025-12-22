@@ -452,3 +452,9 @@ td {
 .balance-amount.negative {
     color: var(--danger);
 }
+
+.amount-detail {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}

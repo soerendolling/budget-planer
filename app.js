@@ -338,7 +338,13 @@ function renderTable(type, fields) {
         fields.forEach(field => {
             const td = document.createElement('td');
             if (field === 'amount') {
-                td.textContent = fromCents(item[field]) + ' €';
+                let text = fromCents(item[field]) + ' €';
+                // Show "Effective Share" for Payer of a Split
+                if (item.isShared && !item.linkedId && item.owner !== 'shared') {
+                    const share = Math.round(item.amount / 2);
+                    text += `<div class="amount-detail">Anteil: ${fromCents(share)} €</div>`;
+                }
+                td.innerHTML = text; // Use innerHTML for the div insertion
             } else if (field === 'isSecurity') {
                 td.textContent = item[field] ? 'Ja' : 'Nein';
             } else {
