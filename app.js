@@ -273,7 +273,10 @@ function renderTable(type, fields) {
         const actionsTd = document.createElement('td');
         actionsTd.innerHTML = `
             <button class="btn-secondary" onclick="editEntry('${type}', '${item.id}')">Edit</button>
-            <button class="btn-danger" onclick="deleteEntry('${type}', '${item.id}')">DEL</button>
+            ${item.linkedId
+                ? '<button class="btn-danger" style="opacity: 0.3; cursor: not-allowed;" title="Teil einer geteilten Ausgabe. Nur über Haupteintrag löschbar.">DEL</button>'
+                : `<button class="btn-danger" onclick="deleteEntry('${type}', '${item.id}')">DEL</button>`
+            }
         `;
         tr.appendChild(actionsTd);
         tbody.appendChild(tr);
