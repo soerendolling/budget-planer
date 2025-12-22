@@ -127,6 +127,15 @@ function calculateSummary() {
         if (item.interval === 'Halbjährlich') monthly = Math.round(item.amount / 6);
         if (item.interval === 'Jährlich') monthly = Math.round(item.amount / 12);
 
+        // Logic Change for Shared Entries:
+        // If it is a shared entry AND it is the main/source entry (no linkedId),
+        // we display the FULL amount in the list (for bank checks), but for the 
+        // summary/budget calculation, we only count HALF (your share).
+        // Partner entries (linkedId exists) are already halved in the DB.
+        if (item.isShared && !item.linkedId) {
+            monthly = Math.round(monthly / 2);
+        }
+
         // Security is now determined by category 'Versicherung'
         if (item.category === 'Versicherung') security += monthly;
         else fixed += monthly;

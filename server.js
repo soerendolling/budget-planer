@@ -113,9 +113,11 @@ app.post('/api/entries', (req, res) => {
     const paidBy = data.paidBy || 'main';
     let amount = data.amount;
 
-    // Split Logic: If split, we halve the amount for the main entry
+    // Split Logic: If split, we NO LONGER halve the amount for the main entry.
+    // The main entry keeps the full amount (for bank reconciliation).
+    // The partner entry will get half.
     if (isSplit) {
-        amount = Math.round(data.amount / 2);
+        // amount remains data.amount
     }
 
     // SQLite Booleans are 0/1
@@ -146,7 +148,7 @@ app.post('/api/entries', (req, res) => {
                 // Partner entry mirrors main entry but with half amount and linked_id
                 // Note: paid_by remains whoever paid the original amount!
                 stmt.run(
-                    partnerId, type, data.name, amount, data.account,
+                    partnerId, type, data.name, Math.round(amount / 2), data.account,
                     data.interval || null, data.category || null,
                     isSecurity, data.type || null,
                     otherOwner, paidBy, 1, id, // linked to primary
