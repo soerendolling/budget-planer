@@ -274,7 +274,7 @@ function renderTable(type, fields) {
         actionsTd.innerHTML = `
             <button class="btn-secondary" onclick="editEntry('${type}', '${item.id}')">Edit</button>
             ${item.linkedId
-                ? '<button class="btn-danger" style="opacity: 0.3; cursor: not-allowed;" title="Teil einer geteilten Ausgabe. Nur über Haupteintrag löschbar.">DEL</button>'
+                ? `<button class="btn-danger" style="opacity: 0.3; cursor: not-allowed;" title="Teil einer geteilten Ausgabe. Haupteintrag unter: ${getMainEntryLocation(type, item.linkedId)}">DEL</button>`
                 : `<button class="btn-danger" onclick="deleteEntry('${type}', '${item.id}')">DEL</button>`
             }
         `;
@@ -326,7 +326,9 @@ window.showModal = function (type, id = null) {
     let fields = '';
 
     // If read-only, we might want to show a notice
-    const notice = readOnly ? '<p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 15px;">Dieser Eintrag wird automatisch durch den Haupteintrag verwaltet.</p>' : '';
+    // If read-only, we might want to show a notice
+    const location = isLinked ? getMainEntryLocation(type, item.linkedId) : '';
+    const notice = readOnly ? `<p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 15px;">Dieser Eintrag wird automatisch durch den Haupteintrag verwaltet (zu finden unter: ${location}).</p>` : '';
 
     if (type === 'fixkosten') {
         fields = `
@@ -402,6 +404,18 @@ function createField(label, id, type, value, attributes = '') {
         </div>
     `;
 }
+
+function getMainEntryLocation(type, linkedId) {
+    if (!linkedId) return '';
+    const mainEntry = state[type].find(i => i.id === linkedId);
+    if (!mainEntry) return 'Unbekannt';
+
+    if (mainEntry.owner === 'shared') return 'Gemeinsam';
+    if (mainEntry.owner === 'main') return 'Ich';
+    if (mainEntry.owner === 'partner') return 'Partnerin';
+    return 'Unbekannt';
+}
+
 
 
 function getAccountsForView() {
