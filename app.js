@@ -218,15 +218,18 @@ function calculateAccountBalances() {
         if (item.interval === 'Halbjährlich') monthly = Math.round(item.amount / 6);
         if (item.interval === 'Jährlich') monthly = Math.round(item.amount / 12);
 
-        // Handle Shared Entries Logic for "My View" (Main)
-        // If I am main, and I see a shared entry that is MINE (owner=main or owner=shared..wait)
-        // If owner='shared' -> It's the master entry, usually only in combined view.
-        // If owner='main' and isShared=1 and linkedId=null -> It's my half.
-        // If owner='main' and isShared=1 and linkedId!=null -> It's a partner split (shouldnt happen for owner=main usually unless I paid and it's split?)
+        // Check if this entry represents a Real Bank Transaction for the current view
+        // 1. If it's a Shared Account: Everyone counts their share (liability to the pot).
+        // 2. If it's a Personal Account: Only the Payer (Primary Entry) counts the expense.
+        //    The Receiver (Linked Entry) filters out because it's just a budget shadow, not a bank hit.
 
-        // Simplified: use what's in the filtered list (which respects view owners).
-        // But wait, getFilteredState already filters by owner = currentView.
-        // So we just sum up what we see.
+        const isSharedAccount = SHARED_ACCOUNTS.includes(item.account);
+
+        if (!isSharedAccount && item.linkedId) {
+            // It's a shadow entry on a personal account (e.g. Partner's split share of a dinner I paid).
+            // It does not hit the Partner's bank account directly.
+            return;
+        }
 
         if (!balances[item.account]) {
             balances[item.account] = { income: 0, expenses: 0 };
@@ -365,12 +368,34 @@ function renderTable(type, fields) {
         });
 
         const actionsTd = document.createElement('td');
+
+        let deleteBtn = '';
+        const isLinked = !!item.linkedId;
+
+        // Delete Restriction Logic
+        // 1. Linked Entry -> Always Disabled (Standard)
+        // 2. Combined View -> Only allow delete if owner is 'shared'
+        let canDelete = true;
+        let deleteTitle = '';
+
+        if (isLinked) {
+            canDelete = false;
+            deleteTitle = `Teil einer geteilten Ausgabe. Haupteintrag unter: ${getMainEntryLocation(type, item.linkedId)}`;
+        } else if (currentView === 'combined' && item.owner !== 'shared') {
+            canDelete = false;
+            const ownerName = item.owner === 'main' ? 'Ich' : 'Partnerin';
+            deleteTitle = `Dieser Eintrag gehört zu ${ownerName}. Löschen nur in der jeweiligen Ansicht möglich.`;
+        }
+
+        if (canDelete) {
+            deleteBtn = `<button class="btn-danger" onclick="deleteEntry('${type}', '${item.id}')">DEL</button>`;
+        } else {
+            deleteBtn = `<button class="btn-danger" style="opacity: 0.3; cursor: not-allowed;" title="${deleteTitle}">DEL</button>`;
+        }
+
         actionsTd.innerHTML = `
             <button class="btn-secondary" onclick="editEntry('${type}', '${item.id}')">Edit</button>
-            ${item.linkedId
-                ? `<button class="btn-danger" style="opacity: 0.3; cursor: not-allowed;" title="Teil einer geteilten Ausgabe. Haupteintrag unter: ${getMainEntryLocation(type, item.linkedId)}">DEL</button>`
-                : `<button class="btn-danger" onclick="deleteEntry('${type}', '${item.id}')">DEL</button>`
-            }
+            ${deleteBtn}
         `;
         tr.appendChild(actionsTd);
         tbody.appendChild(tr);
@@ -406,23 +431,44 @@ window.showModal = function (type, id = null) {
     // Check if it WAS split before (isShared is true and we own it)
     const isLinked = item?.linkedId;
     const showSplit = !isLinked && currentView !== 'combined';
-    const isSplitChecked = item?.isShared && !isLinked; // If it's shared but NOT linked, it's the main entry -> Checked
+    const isSplitChecked = item?.isShared && !isLinked;
+    // Actually, simplifying: precise control over split usually happens in individual views.
 
-    // Read-Only mode for linked entries
-    const readOnly = !!isLinked;
+    // Read-Only mode for linked entries OR if viewing Personal entries in Combined View
+    let readOnly = !!isLinked;
+    let readOnlyReason = 'linked'; // 'linked' or 'wrong_view'
+
+    if (!readOnly && currentView === 'combined' && item && item.owner !== 'shared') {
+        readOnly = true;
+        readOnlyReason = 'wrong_view';
+    }
 
     const readOnlyAttr = readOnly ? 'disabled' : '';
 
     if (readOnly) {
-        title.textContent = 'Eintrag (automatisch verwaltet)';
+        if (readOnlyReason === 'linked') {
+            title.textContent = 'Eintrag (automatisch verwaltet)';
+        } else {
+            title.textContent = 'Eintrag (Nur in eigener Ansicht bearbeitbar)';
+        }
+    } else if (item?.isShared) {
+        title.textContent = 'Geteilter Eintrag bearbeiten';
     }
 
     let fields = '';
 
     // If read-only, we might want to show a notice
-    // If read-only, we might want to show a notice
     const location = isLinked ? getMainEntryLocation(type, item.linkedId) : '';
-    const notice = readOnly ? `<p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 15px;">Dieser Eintrag wird automatisch durch den Haupteintrag verwaltet (zu finden unter: ${location}).</p>` : '';
+    let notice = '';
+
+    if (readOnly) {
+        if (readOnlyReason === 'linked') {
+            notice = `<p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 15px;">Dieser Eintrag wird automatisch durch den Haupteintrag verwaltet (zu finden unter: ${location}).</p>`;
+        } else {
+            const ownerName = item.owner === 'main' ? 'Ich' : 'Partnerin';
+            notice = `<p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 15px;">Dieser Eintrag gehört zu "${ownerName}". Bitte wechsle in diese Ansicht, um ihn zu bearbeiten.</p>`;
+        }
+    }
 
     if (type === 'fixkosten') {
         fields = `
