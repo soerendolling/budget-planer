@@ -81,12 +81,12 @@ window.switchView = function (view) {
 function getFilteredState(listName) {
     const list = state[listName] || [];
     if (currentView === 'combined') {
-        // Filter out splits that belong to a 'shared' master entry to avoid double counting
-        const sharedMasterIds = new Set(list.filter(i => i.owner === 'shared').map(i => i.id));
-        return list.filter(item => {
-            if (item.linkedId && sharedMasterIds.has(item.linkedId)) return false;
-            return true;
-        });
+        // In Combined View, we only want to see the "Source" transaction (Full Amount).
+        // Any entry with a linkedId is a split/derivative (representing a share), so we hide it.
+        // This works for both:
+        // 1. Persona-paid Splits: Source (100%) has linkedId=null. Split (50%) has linkedId.
+        // 2. Shared-Account Splits: Master (100%) has linkedId=null. Shares (50%) have linkedId.
+        return list.filter(item => !item.linkedId);
     }
     return list.filter(item => item.owner === currentView);
 }
@@ -338,13 +338,31 @@ function renderTable(type, fields) {
         fields.forEach(field => {
             const td = document.createElement('td');
             if (field === 'amount') {
-                let text = fromCents(item[field]) + ' €';
-                // Show "Effective Share" for Payer of a Split
-                if (item.isShared && !item.linkedId && item.owner !== 'shared') {
-                    const share = Math.round(item.amount / 2);
-                    text += `<div class="amount-detail">Anteil: ${fromCents(share)} €</div>`;
+                let displayAmountCode = item.amount;
+                let shareAmount = null;
+
+                if (item.isShared) {
+                    if (item.linkedId) {
+                        // Linked Entry (e.g. Partner seeing split, or Shared Account part)
+                        // DB Amount is the Share (50%). Display Full Amount (100%).
+                        displayAmountCode = item.amount * 2;
+                        shareAmount = item.amount;
+                    } else if (item.owner !== 'shared') {
+                        // Payer Entry (Main)
+                        // DB Amount is Full (100%). Share is 50%.
+                        displayAmountCode = item.amount;
+                        shareAmount = Math.round(item.amount / 2);
+                    }
                 }
-                td.innerHTML = text; // Use innerHTML for the div insertion
+
+                let text = fromCents(displayAmountCode) + ' €';
+
+                // Show Anteil if applicable and NOT in Combined View
+                if (shareAmount !== null && currentView !== 'combined') {
+                    text += `<div class="amount-detail">Anteil: ${fromCents(shareAmount)} €</div>`;
+                }
+
+                td.innerHTML = text;
             } else if (field === 'isSecurity') {
                 td.textContent = item[field] ? 'Ja' : 'Nein';
             } else {
