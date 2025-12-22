@@ -152,11 +152,20 @@ app.post('/api/entries', (req, res) => {
                     otherOwner, paidBy, 1, id, // linked to primary
                     (err) => {
                         if (err) console.error("Error creating split entry:", err);
+                        stmt.finalize();
+                        res.json({ "message": "success", "id": id });
                     }
                 );
+            } else {
+                // If NOT split (anymore), ensure any existing partner entry is removed
+                // and the current entry is marked as not shared
+                const partnerId = id + '_partner';
+                db.run("DELETE FROM entries WHERE id = ?", partnerId, (err) => {
+                    if (err) console.error("Error deleting partner entry:", err);
+                    stmt.finalize();
+                    res.json({ "message": "success", "id": id });
+                });
             }
-            stmt.finalize();
-            res.json({ "message": "success", "id": id });
         }
     );
 });

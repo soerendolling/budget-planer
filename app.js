@@ -290,12 +290,14 @@ window.showModal = function (type, id = null) {
     const accounts = getAccountsForView();
 
     // Split Checkbox: Show if it's a new entry OR if it's not a linked entry
-    // We hide split option for linked entries as they are managed via the main entry
+    // Check if it WAS split before (isShared is true and we own it)
     const isLinked = item?.linkedId;
-    const showSplit = !isLinked && currentView !== 'combined'; // Avoid split in combined view to simplify owner logic
+    const showSplit = !isLinked && currentView !== 'combined';
+    const isSplitChecked = item?.isShared && !isLinked; // If it's shared but NOT linked, it's the main entry -> Checked
 
     // Read-Only mode for linked entries
     const readOnly = !!isLinked;
+
     const readOnlyAttr = readOnly ? 'disabled' : '';
 
     if (readOnly) {
@@ -321,23 +323,23 @@ window.showModal = function (type, id = null) {
                 </select>
             </div>
             ${createCategorySelect(item?.category, readOnlyAttr)}
-            ${createAccountSelect(item?.account, accounts, readOnlyAttr)}
-            ${createSplitCheckbox(showSplit)}
+            ${readOnly ? createField('Konto', 'account', 'text', item?.account, readOnlyAttr) : createAccountSelect(item?.account, accounts, readOnlyAttr)}
+            ${createSplitCheckbox(showSplit, isSplitChecked)}
         `;
     } else if (type === 'budget') {
         fields = `
             ${notice}
             ${createField('Bezeichnung', 'name', 'text', item?.name, readOnlyAttr)}
             ${createField('Monatlicher Betrag (€)', 'amount', 'text', item ? fromCents(item.amount) : '', readOnlyAttr)}
-            ${createAccountSelect(item?.account, accounts, readOnlyAttr)}
-            ${createSplitCheckbox(showSplit)}
+            ${readOnly ? createField('Konto', 'account', 'text', item?.account, readOnlyAttr) : createAccountSelect(item?.account, accounts, readOnlyAttr)}
+            ${createSplitCheckbox(showSplit, isSplitChecked)}
         `;
     } else if (type === 'income') {
         fields = `
             ${notice}
             ${createField('Bezeichnung', 'name', 'text', item?.name, readOnlyAttr)}
             ${createField('Betrag (€)', 'amount', 'text', item ? fromCents(item.amount) : '', readOnlyAttr)}
-            ${createAccountSelect(item?.account, accounts, readOnlyAttr)}
+            ${readOnly ? createField('Konto', 'account', 'text', item?.account, readOnlyAttr) : createAccountSelect(item?.account, accounts, readOnlyAttr)}
         `;
     } else if (type === 'savings') {
         fields = `
@@ -351,10 +353,11 @@ window.showModal = function (type, id = null) {
                     <option value="Sparplan">Sparplan</option>
                 </select>
             </div>
-            ${createAccountSelect(item?.account, accounts, readOnlyAttr)}
-            ${createSplitCheckbox(showSplit)}
+            ${readOnly ? createField('Konto', 'account', 'text', item?.account, readOnlyAttr) : createAccountSelect(item?.account, accounts, readOnlyAttr)}
+            ${createSplitCheckbox(showSplit, isSplitChecked)}
         `;
     }
+
 
     // Hide Save Button if Read Only
     const footer = modal.querySelector('.modal-footer');
@@ -404,15 +407,16 @@ function createAccountSelect(selectedValue, accounts, attributes = '') {
     `;
 }
 
-function createSplitCheckbox(show) {
+function createSplitCheckbox(show, isChecked) {
     if (!show) return '';
     return `
         <div class="form-group checkbox-group" style="flex-direction: row; align-items: center; gap: 10px; margin-top: 10px;">
-            <input type="checkbox" id="isSplit">
+            <input type="checkbox" id="isSplit" ${isChecked ? 'checked' : ''}>
             <label for="isSplit" style="margin-bottom: 0;">Geteilte Ausgabe (50/50)</label>
         </div>
     `;
 }
+
 
 
 function createCategorySelect(selectedValue, attributes = '') {
