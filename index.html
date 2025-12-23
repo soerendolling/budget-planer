@@ -194,38 +194,50 @@
     <!-- Account Modal -->
     <div id="accountModal" class="modal">
         <div class="modal-content">
-            <h2>Konten verwalten</h2>
-            <div id="accountList" class="account-mgmt-list"></div>
-
-            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
-
-            <h3>Neues Konto hinzufügen</h3>
-            <form id="accountForm">
-                <input type="hidden" id="accId">
-                <div class="form-group">
-                    <label>Kontoname</label>
-                    <input type="text" id="accName" required placeholder="z.B. Sparkasse">
-                </div>
-                <!-- Flex container for Owner and IBAN -->
-                <div style="display: flex; gap: 15px;">
-                    <div class="form-group" style="flex: 1;">
-                        <label>Besitzer</label>
-                        <select id="accOwner">
-                            <option value="main">Ich</option>
-                            <option value="partner">Partnerin</option>
-                            <option value="shared">Gemeinsam</option>
-                        </select>
+            <div class="modal-header">
+                <h2>Konten verwalten</h2>
+                <button class="btn-secondary btn-sm" onclick="closeAccountModal()">✕</button>
+            </div>
+            
+            <div class="modal-grid">
+                <!-- Left Sidebar: Account List -->
+                <div class="account-sidebar">
+                    <div class="sidebar-header">
+                        <button class="btn-primary full-width" onclick="resetAccountForm()">+ Neues Konto</button>
                     </div>
-                    <div class="form-group" style="flex: 2;">
-                        <label>IBAN (Optional)</label>
-                        <input type="text" id="accIban" placeholder="DE...">
-                    </div>
+                    <div id="accountList" class="account-mgmt-list"></div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn-secondary" onclick="closeAccountModal()">Schließen</button>
-                    <button type="submit" class="btn-primary">Speichern</button>
+
+                <!-- Right Content: Form -->
+                <div class="account-main">
+                    <h3 id="accFormTitle">Neues Konto anlegen</h3>
+                    <form id="accountForm">
+                        <input type="hidden" id="accId">
+                        <div class="form-group">
+                            <label>Kontoname</label>
+                            <input type="text" id="accName" required placeholder="z.B. Sparkasse">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label>Besitzer</label>
+                                <select id="accOwner">
+                                    <option value="main">Ich</option>
+                                    <option value="partner">Partnerin</option>
+                                    <option value="shared">Gemeinsam</option>
+                                </select>
+                            </div>
+                            <div class="form-group half">
+                                <label>IBAN (Optional)</label>
+                                <input type="text" id="accIban" placeholder="DE...">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Speichern</button>
+                            <button type="button" class="btn-danger" id="btnDeleteAccount" style="display:none;" onclick="confirmDeleteAccount()">Löschen</button>
+                        </div>
+                    </form>
                 </div>
-            </form>
+            </div>
         </div>
     </div>
 

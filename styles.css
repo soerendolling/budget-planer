@@ -542,3 +542,150 @@ td {
         opacity: 0;
     }
 }
+
+/* Modal Redesign (Wide) */
+.modal-content.wide {
+    max-width: 900px;
+    padding: 30px;
+    height: 70vh;
+    /* Fixed height for consistent layout */
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.modal-header h2 {
+    margin-bottom: 0;
+}
+
+.modal-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 30px;
+    flex: 1;
+    overflow: hidden;
+    /* Contain inner scrolling */
+}
+
+/* Sidebar (Left) */
+.account-sidebar {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid rgba(0, 0, 0, 0.1);
+    padding-right: 20px;
+    overflow: hidden;
+}
+
+.sidebar-header {
+    margin-bottom: 15px;
+}
+
+.full-width {
+    width: 100%;
+}
+
+.account-mgmt-list {
+    overflow-y: auto;
+    flex: 1;
+    max-height: none;
+    /* Reset previous limit */
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 4px;
+    /* Space for scrollbar */
+}
+
+.account-mgmt-item {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.account-mgmt-item:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.account-mgmt-item.active {
+    background: white;
+    border-color: var(--accent-indigo);
+    box-shadow: 0 2px 8px rgba(94, 92, 230, 0.15);
+}
+
+.account-mgmt-item .details {
+    display: flex;
+    flex-direction: column;
+}
+
+.account-mgmt-item .name {
+    font-weight: 500;
+}
+
+.account-mgmt-item .sub {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* Main Content (Right) */
+.account-main {
+    padding-left: 10px;
+    overflow-y: auto;
+}
+
+.account-main h3 {
+    margin-bottom: 24px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+}
+
+.form-row {
+    display: flex;
+    gap: 20px;
+}
+
+.form-group.half {
+    flex: 1;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: space-between;
+    /* Space submit and delete apart */
+    align-items: center;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+}
+
+@media (max-width: 768px) {
+    .modal-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+    }
+
+    .account-sidebar {
+        border-right: none;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        padding-bottom: 20px;
+        max-height: 200px;
+    }
+
+    .modal-content.wide {
+        height: auto;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+}

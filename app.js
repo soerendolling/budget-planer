@@ -689,10 +689,13 @@ function createSplitCheckbox(show, isChecked) {
 
 // Account Management Functions
 
+// Account Management Functions
 window.openAccountModal = function () {
+    // Ensure wide class is present (should be in HTML, but safety check)
+    document.querySelector('#accountModal .modal-content').classList.add('wide');
+
     renderAccountMgmtList();
-    document.getElementById('accountForm').reset();
-    document.getElementById('accId').value = '';
+    resetAccountForm(); // Reset to "New Account" state
     document.getElementById('accountModal').style.display = 'flex';
 }
 
@@ -700,58 +703,105 @@ window.closeAccountModal = function () {
     document.getElementById('accountModal').style.display = 'none';
 }
 
-function renderAccountMgmtList() {
-    const list = document.getElementById('accountList');
-    list.innerHTML = '';
+window.resetAccountForm = function () {
+    document.getElementById('accountForm').reset();
+    document.getElementById('accId').value = '';
 
-    // Filter accounts based on View:
-    // Main View -> Main + Shared
-    // Partner View -> Partner + Shared
-    // Combined View -> Shared Only (consistent with other logic)
-    const filteredAccounts = state.accounts.filter(acc => {
-        if (currentView === 'combined') return acc.owner === 'shared';
-        return acc.owner === currentView || acc.owner === 'shared';
-    });
+    // Reset Title
+    const titleEl = document.getElementById('accFormTitle');
+    if (titleEl) titleEl.textContent = 'Neues Konto anlegen';
 
-    filteredAccounts.forEach(acc => {
-        const div = document.createElement('div');
-        div.className = 'account-mgmt-item';
-        div.innerHTML = `
-            <div>
-                <strong>${acc.name}</strong> 
-                <span style="font-size: 0.8rem; color: #888;">(${acc.owner})</span>
-                ${acc.iban ? `<div class="iban-display">${acc.iban}</div>` : ''}
-            </div>
-            <div style="display: flex; gap: 5px;">
-                <button class="btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="editAccount('${acc.id}')">Edit</button>
-                <button class="btn-danger" style="padding: 4px 8px; font-size: 0.75rem;" onclick="deleteAccount('${acc.id}')">X</button>
-            </div>
-        `;
-        list.appendChild(div);
-    });
+    // Hide Delete Button
+    const deleteBtn = document.getElementById('btnDeleteAccount');
+    if (deleteBtn) deleteBtn.style.display = 'none';
 
-    // Also update the Owner Select options to match allowed types
+    // Clear Active State in List
+    document.querySelectorAll('.account-mgmt-item').forEach(el => el.classList.remove('active'));
+
+    // Reset Owner Select based on View (Default logic)
     const ownerSelect = document.getElementById('accOwner');
-    if (currentView === 'main') {
-        ownerSelect.innerHTML = `<option value="main">Ich</option><option value="shared">Gemeinsam</option>`;
-    } else if (currentView === 'partner') {
-        ownerSelect.innerHTML = `<option value="partner">Partnerin</option><option value="shared">Gemeinsam</option>`;
-    } else {
-        ownerSelect.innerHTML = `<option value="shared">Gemeinsam</option>`;
-    }
+    if (ownerSelect) ownerSelect.value = (currentView === 'combined') ? 'shared' : currentView;
 }
 
-window.editAccount = function (id) {
+window.selectAccountForEdit = function (id) {
     const acc = state.accounts.find(a => a.id === id);
     if (!acc) return;
 
+    // Populate Fields
     document.getElementById('accId').value = acc.id;
     document.getElementById('accName').value = acc.name;
     document.getElementById('accOwner').value = acc.owner;
     document.getElementById('accIban').value = acc.iban || '';
+
+    // Update Title
+    const titleEl = document.getElementById('accFormTitle');
+    if (titleEl) titleEl.textContent = 'Konto bearbeiten';
+
+    // Show Delete Button
+    const deleteBtn = document.getElementById('btnDeleteAccount');
+    if (deleteBtn) deleteBtn.style.display = 'inline-block';
+
+    // Highlight Item
+    document.querySelectorAll('.account-mgmt-item').forEach(el => {
+        el.classList.toggle('active', el.dataset.id === id);
+    });
 }
 
-window.deleteAccount = async function (id) {
+function renderAccountMgmtList() {
+    const list = document.getElementById('accountList');
+    list.innerHTML = '';
+
+    // Show accounts relevant to view + shared
+    const accountsToShow = state.accounts.filter(acc => {
+        if (currentView === 'combined') return acc.owner === 'shared';
+        return acc.owner === currentView || acc.owner === 'shared';
+    });
+
+    // Sort: My Accounts first, then Shared
+    accountsToShow.sort((a, b) => {
+        if (a.owner === b.owner) return a.name.localeCompare(b.name);
+        return a.owner === 'shared' ? 1 : -1;
+    });
+
+    if (accountsToShow.length === 0) {
+        list.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">Keine Konten gefunden</div>';
+        return;
+    }
+
+    accountsToShow.forEach(acc => {
+        const div = document.createElement('div');
+        div.className = 'account-mgmt-item';
+        div.dataset.id = acc.id;
+        div.onclick = () => selectAccountForEdit(acc.id);
+
+        // Active check if form has this ID (rare on re-render but consistent)
+        const currentId = document.getElementById('accId').value;
+        if (currentId === acc.id) div.classList.add('active');
+
+        let ownerLabel = '';
+        if (acc.owner === 'main') ownerLabel = '👤 Ich';
+        else if (acc.owner === 'partner') ownerLabel = '👤 Partnerin';
+        else if (acc.owner === 'shared') ownerLabel = '👥 Gemeinsam';
+
+        // Mask IBAN
+        const ibanDisplay = acc.iban && acc.iban.length > 4 ? '• ' + acc.iban.slice(-4) : '';
+
+        div.innerHTML = `
+            <div class="details">
+                <span class="name">${acc.name}</span>
+                <span class="sub">${ownerLabel} <span>${ibanDisplay}</span></span>
+            </div>
+            <div style="color: #ccc;">›</div>
+        `;
+        list.appendChild(div);
+    });
+}
+
+window.confirmDeleteAccount = async function () {
+    const id = document.getElementById('accId').value;
+    if (!id) return;
+
+    // Logic from deleteAccount
     const acc = state.accounts.find(a => a.id === id);
     if (!acc) return;
 
@@ -761,20 +811,24 @@ window.deleteAccount = async function (id) {
         count += state[type].filter(e => e.account === acc.name).length;
     });
 
+    let confirmMsg = `Konto "${acc.name}" wirklich löschen?`;
     if (count > 0) {
-        if (!confirm(`Achtung: Es existieren ${count} Einträge für dieses Konto ("${acc.name}").\nDiese werden auf "Unzugeordnet" zurückgesetzt.\n\nWirklich löschen?`)) {
-            return;
-        }
-    } else {
-        if (!confirm(`Konto "${acc.name}" wirklich löschen?`)) return;
+        confirmMsg = `Achtung: Es existieren ${count} Einträge für dieses Konto ("${acc.name}").\nDiese werden auf "Unzugeordnet" zurückgesetzt.\n\nWirklich löschen?`;
     }
+
+    if (!confirm(confirmMsg)) return;
 
     try {
         await fetch(`http://localhost:3001/api/accounts/${id}`, { method: 'DELETE' });
         await loadData(); // Reloads accounts and entries
+
+        // Refresh List & Reset Form
         renderAccountMgmtList();
+        resetAccountForm();
+        showToast('Konto gelöscht', 'success');
     } catch (err) {
         console.error(err);
+        showToast('Fehler beim Löschen', 'error');
     }
 }
 
@@ -785,6 +839,12 @@ document.getElementById('accountForm').addEventListener('submit', async (e) => {
     const owner = document.getElementById('accOwner').value;
     const iban = document.getElementById('accIban').value;
 
+    // IBAN Validation (Client Side)
+    if (iban && !isValidGermanIBAN(iban)) {
+        showToast('Ungültige deutsche IBAN (DE + 20 Ziffern)', 'error');
+        return;
+    }
+
     try {
         await fetch('http://localhost:3001/api/accounts', {
             method: 'POST',
@@ -792,11 +852,17 @@ document.getElementById('accountForm').addEventListener('submit', async (e) => {
             body: JSON.stringify({ id, name, owner, iban })
         });
         await loadData();
+
         renderAccountMgmtList();
-        document.getElementById('accountForm').reset();
-        document.getElementById('accId').value = '';
+        // Keep form open but maybe clear if it was NEW, or keep selected if EDIT?
+        // Better UX: If new, select it. If edit, keep selected.
+        // For simplicity: Select the Just Saved Item
+        selectAccountForEdit(id);
+
+        showToast('Konto gespeichert', 'success');
     } catch (err) {
         console.error(err);
+        showToast('Fehler beim Speichern', 'error');
     }
 });
 function createCategorySelect(selectedValue, attributes = '') {
