@@ -10,11 +10,83 @@ let state = {
 // Partner Mode State
 let currentView = 'main'; // 'main', 'partner', 'combined'
 
+// --- Helper Functions: Toast Declarations ---
+function showToast(message, type = 'info') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+
+    container.appendChild(toast);
+
+    // Auto-remove
+    setTimeout(() => {
+        toast.classList.add('hiding');
+        toast.addEventListener('animationend', () => toast.remove());
+    }, 3000);
+}
+
+// --- Helper Functions: Validation ---
+function isValidGermanIBAN(iban) {
+    if (!iban) return true; // Empty is allowed (optional field)
+    const normalized = iban.replace(/\s+/g, '').toUpperCase();
+    const deRegex = /^DE\d{20}$/;
+    return deRegex.test(normalized);
+}
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     loadData();
     initEventListeners();
+    initAccountListener(); // Separated for clarity
 });
+
+// ...
+
+function initEventListeners() {
+    document.getElementById('entryForm').addEventListener('submit', handleFormSubmit);
+    document.getElementById('exportBtn').addEventListener('click', exportData);
+    document.getElementById('importBtn').addEventListener('change', importData);
+}
+
+function initAccountListener() {
+    document.getElementById('accountForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('accId').value || Date.now().toString();
+        const name = document.getElementById('accName').value;
+        const owner = document.getElementById('accOwner').value;
+        const iban = document.getElementById('accIban').value;
+
+        // Validation: Strict but allow spaces
+        if (!isValidGermanIBAN(iban)) {
+            showToast('Ungültige deutsche IBAN (DE + 20 Ziffern)', 'error');
+            return;
+        }
+
+        try {
+            await fetch('http://localhost:3001/api/accounts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, name, owner, iban })
+            });
+            await loadData();
+            renderAccountMgmtList();
+            showToast('Konto erfolgreich gespeichert', 'success');
+            document.getElementById('accountForm').reset();
+            document.getElementById('accId').value = '';
+        } catch (err) {
+            console.error(err);
+            showToast('Fehler beim Speichern des Kontos', 'error');
+        }
+    });
+}
 
 async function loadData() {
     try {
@@ -43,33 +115,9 @@ async function loadData() {
 // saveData is removed as we now save per-action via API calls
 
 
-function initEventListeners() {
-    document.getElementById('entryForm').addEventListener('submit', handleFormSubmit);
-    document.getElementById('exportBtn').addEventListener('click', exportData);
-    document.getElementById('importBtn').addEventListener('change', importData);
+// Note: The accountForm listener is now defined separately to include validation logic.
+// We removed the duplicate listener here.
 
-    document.getElementById('accountForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const id = document.getElementById('accId').value || Date.now().toString();
-        const name = document.getElementById('accName').value;
-        const owner = document.getElementById('accOwner').value;
-        const iban = document.getElementById('accIban').value;
-
-        try {
-            await fetch('http://localhost:3001/api/accounts', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id, name, owner, iban })
-            });
-            await loadData();
-            renderAccountMgmtList();
-            document.getElementById('accountForm').reset();
-            document.getElementById('accId').value = '';
-        } catch (err) {
-            console.error(err);
-        }
-    });
-}
 
 // View Switching
 window.switchView = function (view) {
@@ -810,35 +858,31 @@ async function handleFormSubmit(e) {
 
     // PaidBy Assignment (Client-side logic)
     // We assume if account is from Main List (and not shared?), PaidBy = Main.
-    // If account is from Partner List (and not shared?), PaidBy = Partner.
-    // For Shared: We default to WHO created it (Owner). 
-    // Actually, "PaidBy" tracks whose money it was. Shared = "Main" (as per DB default) but ignored in calc.
-    // Simplifying: 
-    // If Account in ACCOUNTS.main -> PaidBy = Main
-    // If Account in ACCOUNTS.partner AND NOT in ACCOUNTS.main -> PaidBy = Partner
-    const account = entry.account;
-    // PaidBy Assignment (Client-side logic)
-    // Map account name to owner to determine payer
-    const selectedAcc = state.accounts.find(a => a.name === entry.account);
-    const accOwner = selectedAcc ? selectedAcc.owner : 'main'; // Fallback
-
-    if (accOwner === 'main') {
-        entry.paidBy = 'main';
-    } else if (accOwner === 'partner') {
-        entry.paidBy = 'partner';
-    } else {
-        // Shared Account? Default to who submitted it (currentView) or Main?
-        // Original logic: "PaidBy tracks whose money it was. Shared = Main (default)".
-        // Let's stick to 'main' for Shared unless we want to track who deposited?
-        // Actually, if it's shared, paidBy is less relevant for debt calculation (ignored).
-        entry.paidBy = 'main';
+    // Parse Amount
+    if (entry.amount) {
+        entry.amount = toCents(entry.amount);
     }
 
-    // Automatically set isSecurity based on category
-    if (type === 'fixkosten' && entry.category === 'Versicherung') {
+    // Security Checkbox Logic
+    if (entry.category === 'Versicherung' || entry.type === 'ETF' || entry.type === 'Tagesgeld') {
         entry.isSecurity = true;
     } else {
         entry.isSecurity = false;
+    }
+
+    // --- Determine Payer --- 
+    // If Account is "Shared", then paidBy="shared".
+    // If Account is "Personal" (Main), paidBy="main".
+    // If Account is "Personal" (Partner), paidBy="partner".
+    // We rely on state.accounts to find the owner of the selected account.
+    const accountItems = state.accounts || [];
+    const selectedAcc = accountItems.find(a => a.name === entry.account);
+
+    if (selectedAcc) {
+        entry.paidBy = selectedAcc.owner;
+    } else {
+        // Fallback (should typically not happen if validation is strict)
+        entry.paidBy = currentView === 'partner' ? 'partner' : 'main';
     }
 
     try {
@@ -853,13 +897,14 @@ async function handleFormSubmit(e) {
         // Reload data to ensure sync with server
         await loadData();
         closeModal();
+        showToast('Eintrag erfolgreich gespeichert', 'success');
     } catch (err) {
         console.error('Error saving entry:', err);
-        alert('Fehler beim Speichern des Eintrags.');
+        showToast('Fehler beim Speichern des Eintrags', 'error');
     }
 }
 
-
+// Deletion with Toast
 window.deleteEntry = async function (type, id) {
     try {
         const response = await fetch(`http://localhost:3001/api/entries/${id}`, {
@@ -869,9 +914,10 @@ window.deleteEntry = async function (type, id) {
         if (!response.ok) throw new Error('Failed to delete entry');
 
         await loadData();
+        showToast('Eintrag gelöscht', 'success');
     } catch (err) {
         console.error('Error deleting entry:', err);
-        alert('Fehler beim Löschen des Eintrags.');
+        showToast('Fehler beim Löschen des Eintrags', 'error');
     }
 }
 

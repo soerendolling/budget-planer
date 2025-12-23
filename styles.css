@@ -465,3 +465,80 @@ td {
     color: var(--text-secondary);
     margin-top: 2px;
 }
+
+/* Toast Notifications */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 10000;
+}
+
+.toast {
+    min-width: 250px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: slideIn 0.3s ease-out;
+    border-left: 4px solid #ccc;
+    font-size: 0.95rem;
+}
+
+.toast.success {
+    border-left-color: var(--success-color);
+}
+
+.toast.success::before {
+    content: "✅";
+}
+
+.toast.error {
+    border-left-color: var(--danger-color);
+}
+
+.toast.error::before {
+    content: "❌";
+}
+
+.toast.info {
+    border-left-color: var(--primary-color);
+}
+
+.toast.info::before {
+    content: "ℹ️";
+}
+
+.toast.hiding {
+    animation: fadeOut 0.3s ease-in forwards;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
