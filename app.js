@@ -858,10 +858,6 @@ async function handleFormSubmit(e) {
 
     // PaidBy Assignment (Client-side logic)
     // We assume if account is from Main List (and not shared?), PaidBy = Main.
-    // Parse Amount
-    if (entry.amount) {
-        entry.amount = toCents(entry.amount);
-    }
 
     // Security Checkbox Logic
     if (entry.category === 'Versicherung' || entry.type === 'ETF' || entry.type === 'Tagesgeld') {
