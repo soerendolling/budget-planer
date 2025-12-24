@@ -642,16 +642,14 @@ function getAccountsForView() {
     // Wait, original logic: Combined -> Shared Accounts.
     // Let's stick to original logic:
 
-    if (currentView === 'combined') {
-        return state.accounts.filter(a => a.owner === 'shared').map(a => a.name);
-    }
-
-    // For 'main' and 'partner', we show their own accounts AND shared accounts?
-    // Original ACCOUNTS.main included 'C24 (Gemeinschaftskonto)' which is shared.
-    // So logic: Account Owner matches View OR Account Owner is Shared.
+    // STRICT Filter: Only show accounts valid for the current view
+    // Main View -> Main Accounts Only
+    // Partner View -> Partner Accounts Only
+    // Combined View -> Shared Accounts Only
+    const targetOwner = currentView === 'combined' ? 'shared' : currentView;
 
     return state.accounts
-        .filter(a => a.owner === currentView || a.owner === 'shared')
+        .filter(a => a.owner === targetOwner)
         .map(a => a.name);
 }
 
