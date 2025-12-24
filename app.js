@@ -59,7 +59,8 @@ function initEventListeners() {
 function initAccountListener() {
     document.getElementById('accountForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const id = document.getElementById('accId').value || Date.now().toString();
+        const originalId = document.getElementById('accId').value;
+        const id = originalId || Date.now().toString();
         const name = document.getElementById('accName').value;
         const owner = document.getElementById('accOwner').value;
         const iban = document.getElementById('accIban').value;
@@ -71,7 +72,7 @@ function initAccountListener() {
         }
 
         try {
-            await fetch('http://localhost:3001/api/accounts', {
+            await fetch('/api/accounts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id, name, owner, iban })
@@ -79,8 +80,28 @@ function initAccountListener() {
             await loadData();
             renderAccountMgmtList();
             showToast('Konto erfolgreich gespeichert', 'success');
-            document.getElementById('accountForm').reset();
-            document.getElementById('accId').value = '';
+
+            if (originalId) {
+                // EDIT Mode: Keep form open and populated
+                selectAccountForEdit(id);
+                // Explicitly restore values to be safe
+                document.getElementById('accId').value = id;
+                document.getElementById('accName').value = name;
+                document.getElementById('accOwner').value = owner;
+                document.getElementById('accIban').value = iban;
+            } else {
+                // CREATE Mode: Reset form
+                document.getElementById('accountForm').reset();
+                document.getElementById('accId').value = '';
+
+                // Reset Title & Header Style
+                const titleEl = document.getElementById('accFormTitle');
+                if (titleEl) {
+                    titleEl.textContent = 'Neues Konto anlegen';
+                    titleEl.classList.add('create-mode');
+                    titleEl.classList.remove('edit-mode');
+                }
+            }
         } catch (err) {
             console.error(err);
             showToast('Fehler beim Speichern des Kontos', 'error');
@@ -730,9 +751,13 @@ window.resetAccountForm = function () {
 
     document.getElementById('accId').value = '';
 
-    // Reset Title
+    // Reset Title & Header Style
     const titleEl = document.getElementById('accFormTitle');
-    if (titleEl) titleEl.textContent = 'Neues Konto anlegen';
+    if (titleEl) {
+        titleEl.textContent = 'Neues Konto anlegen';
+        titleEl.classList.add('create-mode');
+        titleEl.classList.remove('edit-mode');
+    }
 
     // Hide Delete Button
     const deleteBtn = document.getElementById('btnDeleteAccount');
@@ -763,9 +788,13 @@ window.selectAccountForEdit = function (id) {
     document.getElementById('accOwner').value = acc.owner;
     document.getElementById('accIban').value = acc.iban || '';
 
-    // Update Title
+    // Update Title & Header Style
     const titleEl = document.getElementById('accFormTitle');
-    if (titleEl) titleEl.textContent = 'Konto bearbeiten';
+    if (titleEl) {
+        titleEl.textContent = 'Konto bearbeiten';
+        titleEl.classList.add('edit-mode');
+        titleEl.classList.remove('create-mode');
+    }
 
     // Show Delete Button
     const deleteBtn = document.getElementById('btnDeleteAccount');

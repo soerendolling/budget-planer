@@ -644,6 +644,23 @@ td {
     text-transform: uppercase;
     font-size: 0.8rem;
     letter-spacing: 0.05em;
+    padding: 8px 12px;
+    border-radius: 8px;
+    width: fit-content;
+}
+
+.account-main h3.edit-mode {
+    background-color: rgba(94, 92, 230, 0.1);
+    /* Indigo tint */
+    color: var(--accent-indigo);
+    border-left: 4px solid var(--accent-indigo);
+}
+
+.account-main h3.create-mode {
+    background-color: rgba(48, 209, 88, 0.1);
+    /* Emerald tint */
+    color: var(--accent-emerald);
+    border-left: 4px solid var(--accent-emerald);
 }
 
 .form-row {
