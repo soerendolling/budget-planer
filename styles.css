@@ -689,3 +689,28 @@ td {
         overflow-y: auto;
     }
 }
+
+/* Account Placeholder */
+.account-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 20px;
+    padding-bottom: 15%;
+    /* Optical adjustment to shift center upwards */
+}
+
+.placeholder-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.account-placeholder p {
+    margin-bottom: 24px;
+    line-height: 1.5;
+}

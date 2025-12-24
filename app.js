@@ -691,11 +691,24 @@ function createSplitCheckbox(show, isChecked) {
 
 // Account Management Functions
 window.openAccountModal = function () {
-    // Ensure wide class is present (should be in HTML, but safety check)
+    // Ensure wide class is present
     document.querySelector('#accountModal .modal-content').classList.add('wide');
 
     renderAccountMgmtList();
-    resetAccountForm(); // Reset to "New Account" state
+
+    // Default State: Show Placeholder, Hide Form
+    const placeholder = document.getElementById('accountPlaceholder');
+    const formContainer = document.getElementById('accountFormContainer');
+
+    if (placeholder) placeholder.style.display = 'flex';
+    if (formContainer) formContainer.style.display = 'none';
+
+    // Update the sidebar button to trigger New Account Form explicitly
+    const sidebarBtn = document.querySelector('.sidebar-header button');
+    if (sidebarBtn) {
+        sidebarBtn.onclick = window.showNewAccountForm;
+    }
+
     document.getElementById('accountModal').style.display = 'flex';
 }
 
@@ -703,8 +716,20 @@ window.closeAccountModal = function () {
     document.getElementById('accountModal').style.display = 'none';
 }
 
+window.showNewAccountForm = function () {
+    resetAccountForm();
+    // Show Form, Hide Placeholder
+    const placeholder = document.getElementById('accountPlaceholder');
+    const formContainer = document.getElementById('accountFormContainer');
+
+    if (placeholder) placeholder.style.display = 'none';
+    if (formContainer) formContainer.style.display = 'block';
+}
+
 window.resetAccountForm = function () {
-    document.getElementById('accountForm').reset();
+    const form = document.getElementById('accountForm');
+    if (form) form.reset();
+
     document.getElementById('accId').value = '';
 
     // Reset Title
@@ -726,6 +751,13 @@ window.resetAccountForm = function () {
 window.selectAccountForEdit = function (id) {
     const acc = state.accounts.find(a => a.id === id);
     if (!acc) return;
+
+    // Show Form, Hide Placeholder
+    const placeholder = document.getElementById('accountPlaceholder');
+    const formContainer = document.getElementById('accountFormContainer');
+
+    if (placeholder) placeholder.style.display = 'none';
+    if (formContainer) formContainer.style.display = 'block';
 
     // Populate Fields
     document.getElementById('accId').value = acc.id;
@@ -751,50 +783,63 @@ function renderAccountMgmtList() {
     const list = document.getElementById('accountList');
     list.innerHTML = '';
 
-    // Show accounts relevant to view + shared
-    const accountsToShow = state.accounts.filter(acc => {
-        if (currentView === 'combined') return acc.owner === 'shared';
-        return acc.owner === currentView || acc.owner === 'shared';
-    });
+    // STRICT Filter accounts based on View:
+    // Main View -> Main Accounts Only
+    // Partner View -> Partner Accounts Only
+    // Combined View -> Shared Accounts Only
+    const targetOwner = currentView === 'combined' ? 'shared' : currentView;
 
-    // Sort: My Accounts first, then Shared
-    accountsToShow.sort((a, b) => {
-        if (a.owner === b.owner) return a.name.localeCompare(b.name);
-        return a.owner === 'shared' ? 1 : -1;
-    });
+    const accountsToShow = state.accounts.filter(acc => acc.owner === targetOwner);
+
+    // Sort by name
+    accountsToShow.sort((a, b) => a.name.localeCompare(b.name));
 
     if (accountsToShow.length === 0) {
-        list.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">Keine Konten gefunden</div>';
-        return;
+        let msg = 'Keine Konten gefunden';
+        if (targetOwner === 'main') msg = 'Keine eigenen Konten';
+        else if (targetOwner === 'partner') msg = 'Keine Partner-Konten';
+        else if (targetOwner === 'shared') msg = 'Keine gemeinsamen Konten';
+
+        list.innerHTML = `<div style="padding:20px; text-align:center; color:#888;">${msg}</div>`;
+    } else {
+        accountsToShow.forEach(acc => {
+            const div = document.createElement('div');
+            div.className = 'account-mgmt-item';
+            div.dataset.id = acc.id;
+            div.onclick = () => selectAccountForEdit(acc.id);
+
+            const currentId = document.getElementById('accId').value;
+            if (currentId === acc.id) div.classList.add('active');
+
+            let ownerLabel = '';
+            if (acc.owner === 'main') ownerLabel = '👤 Ich';
+            else if (acc.owner === 'partner') ownerLabel = '👤 Partnerin';
+            else if (acc.owner === 'shared') ownerLabel = '👥 Gemeinsam';
+
+            const ibanDisplay = acc.iban && acc.iban.length > 4 ? '• ' + acc.iban.slice(-4) : '';
+
+            div.innerHTML = `
+                <div class="details">
+                    <span class="name">${acc.name}</span>
+                    <span class="sub">${ownerLabel} <span>${ibanDisplay}</span></span>
+                </div>
+                <div style="color: #ccc;">›</div>
+            `;
+            list.appendChild(div);
+        });
     }
 
-    accountsToShow.forEach(acc => {
-        const div = document.createElement('div');
-        div.className = 'account-mgmt-item';
-        div.dataset.id = acc.id;
-        div.onclick = () => selectAccountForEdit(acc.id);
-
-        // Active check if form has this ID (rare on re-render but consistent)
-        const currentId = document.getElementById('accId').value;
-        if (currentId === acc.id) div.classList.add('active');
-
-        let ownerLabel = '';
-        if (acc.owner === 'main') ownerLabel = '👤 Ich';
-        else if (acc.owner === 'partner') ownerLabel = '👤 Partnerin';
-        else if (acc.owner === 'shared') ownerLabel = '👥 Gemeinsam';
-
-        // Mask IBAN
-        const ibanDisplay = acc.iban && acc.iban.length > 4 ? '• ' + acc.iban.slice(-4) : '';
-
-        div.innerHTML = `
-            <div class="details">
-                <span class="name">${acc.name}</span>
-                <span class="sub">${ownerLabel} <span>${ibanDisplay}</span></span>
-            </div>
-            <div style="color: #ccc;">›</div>
-        `;
-        list.appendChild(div);
-    });
+    // Update Owner Select options to SINGLE option matching the view
+    const ownerSelect = document.getElementById('accOwner');
+    if (ownerSelect) {
+        if (currentView === 'main') {
+            ownerSelect.innerHTML = `<option value="main">Ich</option>`;
+        } else if (currentView === 'partner') {
+            ownerSelect.innerHTML = `<option value="partner">Partnerin</option>`;
+        } else {
+            ownerSelect.innerHTML = `<option value="shared">Gemeinsam</option>`;
+        }
+    }
 }
 
 window.confirmDeleteAccount = async function () {
