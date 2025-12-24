@@ -279,15 +279,38 @@ app.get('/api/accounts', (req, res) => {
 });
 
 // POST (Create/Update) account
+// POST (Create/Update) account
 app.post('/api/accounts', (req, res) => {
     const { id, name, owner, iban } = req.body;
-    const sql = `INSERT OR REPLACE INTO accounts (id, name, owner, iban) VALUES (?, ?, ?, ?)`;
-    db.run(sql, [id, name, owner, iban], (err) => {
+
+    // Check for rename scenario
+    db.get("SELECT name FROM accounts WHERE id = ?", [id], (err, row) => {
         if (err) {
             res.status(400).json({ "error": err.message });
             return;
         }
-        res.json({ message: "success", id });
+
+        const proceed = () => {
+            const sql = `INSERT OR REPLACE INTO accounts (id, name, owner, iban) VALUES (?, ?, ?, ?)`;
+            db.run(sql, [id, name, owner, iban], (err) => {
+                if (err) {
+                    res.status(400).json({ "error": err.message });
+                    return;
+                }
+                res.json({ message: "success", id });
+            });
+        };
+
+        if (row && row.name !== name) {
+            // Account exists and name has changed: Update entries
+            console.log(`Renaming account '${row.name}' to '${name}' in entries...`);
+            db.run("UPDATE entries SET account = ? WHERE account = ?", [name, row.name], (err) => {
+                if (err) console.error("Error updating entries for account rename:", err);
+                proceed();
+            });
+        } else {
+            proceed();
+        }
     });
 });
 
