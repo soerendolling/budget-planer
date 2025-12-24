@@ -904,39 +904,7 @@ window.confirmDeleteAccount = async function () {
     }
 }
 
-document.getElementById('accountForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = document.getElementById('accId').value || Date.now().toString();
-    const name = document.getElementById('accName').value;
-    const owner = document.getElementById('accOwner').value;
-    const iban = document.getElementById('accIban').value;
 
-    // IBAN Validation (Client Side)
-    if (iban && !isValidGermanIBAN(iban)) {
-        showToast('Ungültige deutsche IBAN (DE + 20 Ziffern)', 'error');
-        return;
-    }
-
-    try {
-        await fetch('http://localhost:3001/api/accounts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, name, owner, iban })
-        });
-        await loadData();
-
-        renderAccountMgmtList();
-        // Keep form open but maybe clear if it was NEW, or keep selected if EDIT?
-        // Better UX: If new, select it. If edit, keep selected.
-        // For simplicity: Select the Just Saved Item
-        selectAccountForEdit(id);
-
-        showToast('Konto gespeichert', 'success');
-    } catch (err) {
-        console.error(err);
-        showToast('Fehler beim Speichern', 'error');
-    }
-});
 function createCategorySelect(selectedValue, attributes = '') {
     const categories = [
         'Versicherung',
